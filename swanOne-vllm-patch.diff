@@ -1,0 +1,1646 @@
+swanOne: vLLM patch set for JevBench bench request
+
+Nine files, Apache-2.0, modifications to vLLM's own code. 1093 changed lines
+(git diff --numstat, summed).
+
+Baseline = the published vllm/vllm-openai:qwen38-flash-next image, linux/amd64 child
+sha256:0aea30240f3e3d9ffae8526643950e170eb5fa07fc427016a9dd90892afa2aa3.
+
+Apply from / (or against a container shell), paths are the image's absolute paths:
+
+    patch -p1 -d / < swanOne-vllm-patch.diff
+
+Verified: applying this file to pristine copies of the nine files reproduces the nine
+patched files byte-for-byte (9/9). Mounting each file over its target is the shape we
+actually tested and served with; this diff is the equivalent for an image-internal apply.
+
+Per-file changed-line counts, sha256s and the apply-by-mount command: patches/MANIFEST.md
+
+--- a/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py
++++ b/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py
+@@ -12,6 +12,12 @@
+ import vllm.envs as envs
+ from vllm.config import CacheConfig, ModelConfig, VllmConfig, get_current_vllm_config
+ from vllm.forward_context import get_forward_context
++import os
++from vllm.logger import init_logger
++from vllm.model_executor.layers.quantization.modelopt import ModelOptNvFp4Config, ModelOptMixedPrecisionConfig
++from vllm.model_executor.utils import set_weight_attrs
++
++logger = init_logger(__name__)
+ from vllm.model_executor.layers.linear import ReplicatedLinear
+ from vllm.model_executor.layers.mamba.abstract import MambaBase
+ from vllm.model_executor.layers.mamba.mamba_utils import (
+@@ -182,34 +188,274 @@
+ 
+     def embedding(self, layer: nn.Module, input_: torch.Tensor) -> torch.Tensor:
+         return F.embedding(input_, layer.weight)
++
++
++
++_PLE_PAGE_SHIFT = 12
++_PLE_PAGE = 1 << _PLE_PAGE_SHIFT
++
++
++def _ple_prefetch_rows(fd, ids, row_width) -> None:
++    """Queue every page a row gather will touch, in one batch.
++
++    torch.index_select over the 27 GiB packed table is one CPU thread walking
++    a list of unrelated 90-byte rows. PyTorch only parallelises index_select
++    past a ~32k-element grain, and a decode batch gathers 64-320 rows, so each
++    missing 4 KiB page is faulted in on its own at queue depth 1 (~77 us on
++    this NVMe) while the GPU worker spins waiting for the handshake. Naming
++    all of the pages up front lets the device see them at once; the gather
++    that follows finds them resident or already in flight.
++
++    Advisory only: any failure just leaves the original fault-per-row path.
++    """
++    if fd is None or ids is None or ids.numel() == 0:
++        return
++    try:
++        offsets = ids.to(torch.int64) * row_width
++        pages = torch.cat(
++            (
++                offsets >> _PLE_PAGE_SHIFT,
++                (offsets + row_width - 1) >> _PLE_PAGE_SHIFT,
++            )
++        )
++        # unique() sorts, so the reads are issued in ascending file order.
++        for page in torch.unique(pages).tolist():
++            os.posix_fadvise(
++                fd, page << _PLE_PAGE_SHIFT, _PLE_PAGE, os.POSIX_FADV_WILLNEED
++            )
++    except Exception:  # pragma: no cover - advisory prefetch only
++        pass
++
++
++_NVFP4_BLOCK_SIZE = 16
++
++
++class Qwen3_8FlashNextPLENVFp4EmbeddingMethod(QuantizeMethodBase):
++    """NVFP4 PLE embedding kept packed at runtime."""
++
++    def create_weights(
++        self,
++        layer: nn.Module,
++        input_size_per_partition: int,
++        output_partition_sizes: list[int],
++        input_size: int,
++        output_size: int,
++        params_dtype: torch.dtype,
++        **extra_weight_attrs,
++    ) -> None:
++        del input_size, output_size, extra_weight_attrs
++        if input_size_per_partition % _NVFP4_BLOCK_SIZE:
++            raise ValueError(
++                "NVFP4 PLE embedding requires the embedding dim to be a "
++                f"multiple of {_NVFP4_BLOCK_SIZE}, got {input_size_per_partition}"
++            )
++        self.params_dtype = params_dtype
++        self.head_dim = input_size_per_partition
++        self.packed_row_width = (
++            input_size_per_partition // 2
++            + input_size_per_partition // _NVFP4_BLOCK_SIZE
++        )
++        rows = sum(output_partition_sizes)
++        weight = nn.Parameter(
++            torch.empty(rows, input_size_per_partition // 2, dtype=torch.uint8),
++            requires_grad=False,
++        )
++        set_weight_attrs(weight, {"input_dim": 1, "output_dim": 0})
++        layer.register_parameter("weight", weight)
++
++        weight_scale = nn.Parameter(
++            torch.empty(
++                rows,
++                input_size_per_partition // _NVFP4_BLOCK_SIZE,
++                dtype=torch.float8_e4m3fn,
++            ),
++            requires_grad=False,
++        )
++        set_weight_attrs(weight_scale, {"input_dim": 1, "output_dim": 0})
++        layer.register_parameter("weight_scale", weight_scale)
++
++        weight_scale_2 = nn.Parameter(
++            torch.empty((), dtype=torch.float32), requires_grad=False
++        )
++        layer.register_parameter("weight_scale_2", weight_scale_2)
++        self._lut: torch.Tensor | None = None
++
++    def process_weights_after_loading(self, layer: nn.Module) -> None:
++        ws2 = layer.weight_scale_2.data.reshape(())
++        if ws2.numel() == 0 or not torch.isfinite(ws2).all():
++            raise ValueError(
++                "NVFP4 PLE checkpoint is missing ngram_embedding.weight_scale_2"
++            )
++        self._lut = torch.tensor(
++            _FP4_VALUES, dtype=torch.float32, device=layer.weight.device
++        )
++
++    def apply(
++        self,
++        layer: nn.Module,
++        x: torch.Tensor,
++        bias: torch.Tensor | None = None,
++    ) -> torch.Tensor:
++        raise NotImplementedError("PLE NVFP4 weights only support embedding lookup")
++
++    def embedding(self, layer: nn.Module, input_: torch.Tensor) -> torch.Tensor:
++        codes = F.embedding(input_, layer.weight)
++        scales = F.embedding(input_, layer.weight_scale)
++        return torch.cat((codes, scales.view(torch.uint8)), dim=-1)
++
++    def dequantize(
++        self,
++        packed_rows: torch.Tensor,
++        scale_2: torch.Tensor,
++        output_dtype: torch.dtype,
++    ) -> torch.Tensor:
++        lut = self._lut
++        if lut is None or lut.device != packed_rows.device:
++            lut = torch.tensor(
++                _FP4_VALUES, dtype=torch.float32, device=packed_rows.device
++            )
++            self._lut = lut
++        return _dequant_nvfp4_rows(
++            packed_rows, self.head_dim, scale_2, output_dtype, lut
++        )
++
++
++def _ple_dtype_is_fp8(ple_embedding_dtype: object) -> bool:
++    if ple_embedding_dtype is None:
++        return False
++    if isinstance(ple_embedding_dtype, torch.dtype):
++        return ple_embedding_dtype == torch.float8_e4m3fn
++    text = str(ple_embedding_dtype).rsplit(".", 1)[-1].lower()
++    return text in {"float8_e4m3fn", "fp8"}
+ 
+ 
++def _ple_dtype_is_nvfp4(ple_embedding_dtype: object) -> bool:
++    if ple_embedding_dtype is None:
++        return False
++    if isinstance(ple_embedding_dtype, torch.dtype):
++        return False
++    text = str(ple_embedding_dtype).rsplit(".", 1)[-1].lower()
++    return text in {"nvfp4", "fp4", "w4a16_nvfp4"}
++
++
++_FP4_VALUES = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
++
++
++def _dequant_nvfp4_codes(
++    packed: torch.Tensor,
++    scale: torch.Tensor,
++    scale_2: torch.Tensor,
++    lut: torch.Tensor | None = None,
++) -> torch.Tensor:
++    half = packed.shape[-1]
++    codes = torch.stack([packed & 0xF, (packed >> 4) & 0xF], dim=-1).reshape(
++        *packed.shape[:-1], half * 2
++    )
++    if lut is None:
++        lut = torch.tensor(_FP4_VALUES, dtype=torch.float32, device=packed.device)
++    magnitude = lut[(codes & 0x7).long()]
++    sign = ((codes >> 3) & 1).to(torch.float32)
++    fp4 = (magnitude * (1 - 2 * sign)).reshape(
++        *packed.shape[:-1], -1, _NVFP4_BLOCK_SIZE
++    )
++    output = fp4 * scale.float().unsqueeze(-1) * scale_2.float()
++    return output.reshape(*packed.shape[:-1], half * 2)
++
++
++def _dequant_nvfp4_rows(
++    packed_rows: torch.Tensor,
++    head_dim: int,
++    scale_2: torch.Tensor,
++    output_dtype: torch.dtype,
++    lut: torch.Tensor,
++) -> torch.Tensor:
++    half = head_dim // 2
++    codes = packed_rows[..., :half]
++    scales = packed_rows[..., half:].contiguous().view(torch.float8_e4m3fn)
++    return _dequant_nvfp4_codes(codes, scales, scale_2, lut).to(output_dtype)
++
++
++def _get_shared_nvfp4_outer_scale(
++    outer_scales: dict[int, torch.Tensor],
++) -> torch.Tensor:
++    first_index, reference = next(iter(outer_scales.items()))
++    reference = reference.reshape(())
++    for shard_index, outer_scale in outer_scales.items():
++        if not torch.equal(outer_scale.reshape(()), reference):
++            raise ValueError(
++                "NVFP4 PLE shards must share the same global scale, but "
++                f"shards {first_index} and {shard_index} differ"
++            )
++    return reference
++
++
+ def _get_ple_embedding_quant_method(
+     quant_config: QuantizationConfig | None,
+     prefix: str,
++    ple_embedding_dtype: object = None,
+ ) -> QuantizeMethodBase | None:
+-    """Select global-scale FP8 only for quantized PLE checkpoint shards."""
++    """Select a packed PLE embedding method for quantized checkpoint shards."""
+ 
+-    if not isinstance(quant_config, Fp8Config):
+-        return None
+-    if not quant_config.is_checkpoint_fp8_serialized:
+-        return None
++    # Some checkpoints declare PLE storage directly in text_config.
++    if _ple_dtype_is_nvfp4(ple_embedding_dtype):
++        logger.info_once(
++            "PLE embedding %s uses the runtime NVFP4 method (ple_embedding_dtype)",
++            prefix,
++        )
++        return Qwen3_8FlashNextPLENVFp4EmbeddingMethod()
++    if _ple_dtype_is_fp8(ple_embedding_dtype):
++        logger.info_once(
++            "PLE embedding %s uses the runtime FP8 method (ple_embedding_dtype)",
++            prefix,
++        )
++        return Qwen3_8FlashNextPLEFp8EmbeddingMethod()
+ 
+-    ignored_layers = quant_config.ignored_layers
+-    if is_layer_skipped(
+-        prefix,
+-        ignored_layers,
+-        quant_config.packed_modules_mapping,
+-        match_mode=quant_config.ignored_layers_match_mode,
+-    ):
++    if isinstance(quant_config, ModelOptMixedPrecisionConfig):
++        # NVIDIA stores this in quantized_layers, without ple_embedding_dtype.
++        # Use vLLM's resolver: apply_vllm_mapper has already renamed HF prefixes.
++        algo = quant_config._resolve_quant_algo(prefix)
++        if algo == "FP8":
++            logger.info_once("PLE embedding %s uses ModelOpt mixed FP8", prefix)
++            return Qwen3_8FlashNextPLEFp8EmbeddingMethod()
++        if algo == "NVFP4":
++            logger.info_once("PLE embedding %s uses ModelOpt mixed NVFP4", prefix)
++            return Qwen3_8FlashNextPLENVFp4EmbeddingMethod()
++        if algo is not None:
++            raise ValueError(f"Unsupported ModelOpt PLE storage {algo}: {prefix}")
+         return None
+-    # PLE checkpoint shards form one runtime embedding parameter.
+-    shard_prefix = f"{prefix}.shard_"
+-    if any(name.startswith(shard_prefix) for name in ignored_layers):
+-        return None
+-    return Qwen3_8FlashNextPLEFp8EmbeddingMethod()
++
++    if isinstance(quant_config, Fp8Config):
++        if not quant_config.is_checkpoint_fp8_serialized:
++            return None
++        ignored_layers = quant_config.ignored_layers
++        if is_layer_skipped(
++            prefix,
++            ignored_layers,
++            quant_config.packed_modules_mapping,
++            match_mode=quant_config.ignored_layers_match_mode,
++        ):
++            return None
++        shard_prefix = f"{prefix}.shard_"
++        if any(name.startswith(shard_prefix) for name in ignored_layers):
++            return None
++        return Qwen3_8FlashNextPLEFp8EmbeddingMethod()
++
++    if isinstance(quant_config, ModelOptNvFp4Config):
++        if not quant_config.is_checkpoint_nvfp4_serialized:
++            return None
++        if not quant_config.is_layer_excluded(prefix):
++            logger.info_once("PLE embedding %s uses the runtime NVFP4 method", prefix)
++            return Qwen3_8FlashNextPLENVFp4EmbeddingMethod()
++        if _ple_dtype_is_fp8(ple_embedding_dtype):
++            logger.info_once(
++                "Excluded ModelOpt PLE embedding %s uses the runtime FP8 method",
++                prefix,
++            )
++            return Qwen3_8FlashNextPLEFp8EmbeddingMethod()
+ 
++    return None
+ 
++
+ class Qwen3_8FlashNextNGramEmbedding(PleOffloadLayer):
+     def __init__(
+         self,
+@@ -286,7 +532,9 @@
+             padding_size=divisor,
+             prefix=f"{prefix}.ngram_embedding",
+             quant_method=_get_ple_embedding_quant_method(
+-                quant_config, f"{prefix}.ngram_embedding"
++                quant_config,
++                f"{prefix}.ngram_embedding",
++                getattr(config, "ple_embedding_dtype", None),
+             ),
+         )
+         self.register_buffer(
+@@ -427,22 +675,68 @@
+             id_blocks.append(ids[request_indices, adjusted_columns])
+         ngram_ids = torch.cat(id_blocks, dim=-1)
+         if output_buffer is not None:
+-            output = output_buffer[:num_tokens, : self.embedding_dim]
++            # Offload fast path. The GPU side expects, per head, the
++            # same packed row the on-device lookup produces:
++            # NVFP4 -> cat(codes[head_dim/2], scales[head_dim/16]).
++            # Prefer a memory-mapped pre-packed table (built by
++            # files/build_ple_packed_table.py); otherwise assemble
++            # the row from the separate code/scale parameters.
++            emb = self.ngram_embedding
++            ids = ngram_ids.reshape(-1)
++            packed = getattr(emb, "_packed_table", None)
++            scales = getattr(emb, "weight_scale", None)
++            if packed is not None:
++                row_width = packed.shape[-1]
++                total_width = ngram_ids.shape[-1] * row_width
++                output = output_buffer[:num_tokens, :total_width]
++                _ple_prefetch_rows(
++                    getattr(emb, "_packed_table_fd", None), ids, row_width
++                )
++                torch.index_select(
++                    packed, 0, ids,
++                    out=output.reshape(-1, row_width).view(torch.uint8)
++                )
++                return output
++            if scales is not None and scales.dim() == 2:
++                codes = emb.weight
++                scales_u8 = scales.view(torch.uint8)
++                cw, sw = codes.shape[-1], scales_u8.shape[-1]
++                row_width = cw + sw
++                total_width = ngram_ids.shape[-1] * row_width
++                output = output_buffer[:num_tokens, :total_width]
++                rows = output.reshape(-1, row_width)
++                rows[:, :cw].copy_(codes.index_select(0, ids))
++                rows[:, cw:].copy_(scales_u8.index_select(0, ids))
++                return output
++            weight = emb.weight
++            row_width = weight.shape[-1]
++            total_width = ngram_ids.shape[-1] * row_width
++            output = output_buffer[:num_tokens, :total_width]
+             torch.index_select(
+-                self.ngram_embedding.weight,
+-                0,
+-                ngram_ids.reshape(-1),
+-                out=output.reshape(-1, self.head_dim),
++                weight, 0, ids, out=output.reshape(-1, row_width)
+             )
+             return output
+         return self.ngram_embedding(ngram_ids).flatten(-2)
+ 
++
+     def get_offload_output_dtype(self, default_dtype: torch.dtype) -> torch.dtype:
+-        """Keep quantized lookup results in their embedding storage dtype."""
++        """Keep quantized lookup results in their storage dtype."""
+         embedding = getattr(self, "ngram_embedding", None)
+         weight = getattr(embedding, "weight", None)
+         if weight is not None:
+             return weight.dtype
++        if hasattr(self, "_offload_weight_scale_2"):
++            return torch.uint8
++        if isinstance(
++            getattr(self, "_offload_quant_method", None),
++            Qwen3_8FlashNextPLENVFp4EmbeddingMethod,
++        ):
++            return torch.uint8
++        if isinstance(
++            getattr(self, "_offload_quant_method", None),
++            Qwen3_8FlashNextPLEFp8EmbeddingMethod,
++        ):
++            return torch.float8_e4m3fn
+         if hasattr(self, "_offload_weight_scale"):
+             return torch.float8_e4m3fn
+         return default_dtype
+@@ -450,19 +744,55 @@
+     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
+         """Load hash buffers and checkpoint-split embedding rows."""
+ 
+-        # GPU workers retain only the global FP8 scale. The CPU process owns the
+-        # embedding weight and returns its quantized lookup output unchanged.
+         if envs.VLLM_PLE_CPU_OFFLOAD and not is_offload_process():
+             retained: set[str] = set()
+-            for name, loaded_weight in weights:
+-                if name != "ngram_embedding.weight_scale":
+-                    continue
++            quant_method = getattr(
++                getattr(self, "ngram_embedding", None), "quant_method", None
++            )
++            if quant_method is None:
++                quant_method = getattr(self, "_offload_quant_method", None)
++            if isinstance(quant_method, Qwen3_8FlashNextPLEFp8EmbeddingMethod):
++                for name, loaded_weight in weights:
++                    if name != "ngram_embedding.weight_scale":
++                        continue
++                    self.register_buffer(
++                        "_offload_weight_scale",
++                        loaded_weight.to(
++                            device=torch.accelerator.current_accelerator()
++                        ),
++                        persistent=False,
++                    )
++                    retained.add(name)
++            elif isinstance(quant_method, Qwen3_8FlashNextPLENVFp4EmbeddingMethod):
++                scale_2 = None
++                for name, loaded_weight in weights:
++                    if name != "ngram_embedding.weight_scale_2":
++                        continue
++                    scale_2 = loaded_weight.reshape(()).to(
++                        device=torch.accelerator.current_accelerator()
++                    )
++                    retained.add(name)
++                    # no break: drain the iterator (generic loader must not see the rest)
++                self._offload_quant_method = quant_method
++                if scale_2 is None:
++                    # load_weights is invoked once per tensor group; the
++                    # global scale may arrive in a later call. The GPU-side
++                    # dequant raises if it is still missing at use time.
++                    return retained
+                 self.register_buffer(
+-                    "_offload_weight_scale",
+-                    loaded_weight.to(device=torch.accelerator.current_accelerator()),
++                    "_offload_weight_scale_2", scale_2, persistent=False
++                )
++                self.register_buffer(
++                    "_offload_nvfp4_lut",
++                    torch.tensor(
++                        _FP4_VALUES, dtype=torch.float32, device=scale_2.device
++                    ),
+                     persistent=False,
+                 )
+-                retained.add(name)
++                self._offload_quant_method = quant_method
++            else:
++                for _ in weights:
++                    pass
+             return retained
+ 
+         persistent_buffers = {
+@@ -473,6 +803,11 @@
+         loaded: set[str] = set()
+         regular_weights: list[tuple[str, torch.Tensor]] = []
+         shard_prefix = "ngram_embedding.shard_"
++        quant_method = getattr(self.ngram_embedding, "quant_method", None)
++        nvfp4_runtime = isinstance(quant_method, Qwen3_8FlashNextPLENVFp4EmbeddingMethod)
++        packed_codes: dict[int, torch.Tensor] = {}
++        packed_scales: dict[int, torch.Tensor] = {}
++        global_outer_scale: torch.Tensor | None = None
+ 
+         for name, loaded_weight in weights:
+             leaf_name = name.rsplit(".", 1)[-1]
+@@ -488,7 +823,41 @@
+                 buffer.copy_(loaded_weight.to(device=buffer.device, dtype=buffer.dtype))
+                 loaded.add(name)
+                 continue
+-            if name.startswith(shard_prefix) and name.endswith(".weight"):
++
++            if nvfp4_runtime and (
++                name == "ngram_embedding.weight_scale_2"
++                or name.endswith(".ngram_embedding.weight_scale_2")
++                or leaf_name == "weight_scale_2"
++            ):
++                global_outer_scale = loaded_weight
++                continue
++
++            if nvfp4_runtime and name.startswith(shard_prefix):
++                suffix = name[len(shard_prefix) :]
++                for ending, sink in (
++                    (".weight_scale", packed_scales),
++                    (".weight", packed_codes),
++                ):
++                    if not suffix.endswith(ending):
++                        continue
++                    shard_text = suffix[: -len(ending)]
++                    shard_index = int(shard_text)
++                    if shard_index >= self.split_ngram_parts:
++                        raise ValueError(
++                            f"PLE embedding shard index {shard_index} exceeds "
++                            f"split_ngram_parts={self.split_ngram_parts}"
++                        )
++                    sink[shard_index] = loaded_weight
++                    break
++                else:
++                    regular_weights.append((name, loaded_weight))
++                continue
++
++            if (
++                not nvfp4_runtime
++                and name.startswith(shard_prefix)
++                and name.endswith(".weight")
++            ):
+                 shard_text = name[len(shard_prefix) : -len(".weight")]
+                 if not shard_text.isdigit():
+                     regular_weights.append((name, loaded_weight))
+@@ -526,8 +895,63 @@
+                 continue
+             regular_weights.append((name, loaded_weight))
+ 
++        if nvfp4_runtime and packed_codes:
++            for shard_index in packed_codes:
++                if shard_index not in packed_scales:
++                    raise ValueError(
++                        f"NVFP4 PLE shard {shard_index} is missing its block scales"
++                    )
++
++        for shard_index, codes in packed_codes.items():
++            embedding = self.ngram_embedding
++            shard_size = (
++                embedding.org_vocab_size + self.split_ngram_parts - 1
++            ) // self.split_ngram_parts
++            checkpoint_start = shard_index * shard_size
++            expected_rows = max(
++                0, min(shard_size, embedding.org_vocab_size - checkpoint_start)
++            )
++            expected_codes_shape = (expected_rows, embedding.embedding_dim // 2)
++            if tuple(codes.shape) != expected_codes_shape:
++                raise ValueError(
++                    f"Shape mismatch for packed PLE shard {shard_index}: "
++                    f"expected {expected_codes_shape}, got {tuple(codes.shape)}"
++                )
++            tp_bounds = {
++                "checkpoint_start": checkpoint_start,
++                "tp_start": embedding.shard_indices.org_vocab_start_index,
++                "tp_end": embedding.shard_indices.org_vocab_end_index,
++            }
++            scales = packed_scales[shard_index]
++            expected_scales_shape = (
++                expected_rows,
++                embedding.embedding_dim // _NVFP4_BLOCK_SIZE,
++            )
++            if tuple(scales.shape) != expected_scales_shape:
++                raise ValueError(
++                    f"Scale shape mismatch for packed PLE shard {shard_index}: "
++                    f"expected {expected_scales_shape}, got {tuple(scales.shape)}"
++                )
++            copy_ple_embedding_shard_(embedding.weight.data, codes, **tp_bounds)
++            copy_ple_embedding_shard_(embedding.weight_scale.data, scales, **tp_bounds)
++
+         if regular_weights:
+             loaded.update(AutoWeightsLoader(self).load_weights(regular_weights))
++
++        if nvfp4_runtime:
++            if global_outer_scale is not None:
++                self.ngram_embedding.weight_scale_2.data.copy_(
++                    global_outer_scale.reshape(())
++                )
++                loaded.add("ngram_embedding.weight_scale_2")
++                self._nvfp4_global_scale_loaded = True
++            if packed_codes:
++                loaded.update(
++                    {
++                        "ngram_embedding.weight",
++                        "ngram_embedding.weight_scale",
++                    }
++                )
+         return loaded
+ 
+ 
+@@ -554,6 +978,11 @@
+         )
+         self.prefix = prefix
+         self.hidden_size = int(config.hidden_size)
++        self.ple_embedding_dim = int(config.ple_embed_dim)
++        self.ple_ngram_heads = (int(config.ngram_size) - 1) * int(
++            config.heads_per_ngram
++        )
++        self.ple_head_dim = self.ple_embedding_dim // self.ple_ngram_heads
+         self.hc_count = config.hc_count
+         self.hc_hidden_size = self.hidden_size * self.hc_count
+         self.conv_kernel_size = int(config.ple_conv_kernel_size)
+@@ -575,6 +1004,15 @@
+                 quant_config=quant_config,
+                 params_dtype=model_config.dtype,
+             )
++        if not hasattr(self.ple_embedding, "ngram_embedding"):
++            # Offload placeholder on the GPU worker.
++            self.ple_embedding._offload_quant_method = (
++                _get_ple_embedding_quant_method(
++                    quant_config,
++                    f"{prefix}.ple_embedding.ngram_embedding",
++                    getattr(config, "ple_embedding_dtype", None),
++                )
++            )
+         self.key_proj = ReplicatedLinear(
+             int(config.ple_embed_dim),
+             self.hc_hidden_size,
+@@ -623,6 +1061,7 @@
+             return weight_scale
+         return getattr(self.ple_embedding, "_offload_weight_scale", None)
+ 
++
+     def _dequantize_embeddings(
+         self,
+         embeddings: torch.Tensor,
+@@ -630,6 +1069,45 @@
+     ) -> torch.Tensor:
+         """Dequantize PLE lookup output."""
+ 
++        quant_method = getattr(
++            getattr(self.ple_embedding, "ngram_embedding", None),
++            "quant_method",
++            None,
++        )
++        offload_quant_method = getattr(
++            self.ple_embedding, "_offload_quant_method", None
++        )
++        if isinstance(offload_quant_method, Qwen3_8FlashNextPLENVFp4EmbeddingMethod):
++            offload_scale_2 = getattr(
++                self.ple_embedding, "_offload_weight_scale_2", None
++            )
++            if offload_scale_2 is None:
++                raise RuntimeError("NVFP4 PLE offload is missing its global scale")
++            packed_row_width = (
++                self.ple_head_dim // 2 + self.ple_head_dim // _NVFP4_BLOCK_SIZE
++            )
++            packed_rows = embeddings[
++                ..., : self.ple_ngram_heads * packed_row_width
++            ].unflatten(-1, (self.ple_ngram_heads, packed_row_width))
++            dequantized = _dequant_nvfp4_rows(
++                packed_rows,
++                self.ple_head_dim,
++                offload_scale_2,
++                output_dtype,
++                self.ple_embedding._offload_nvfp4_lut,
++            )
++            return dequantized.flatten(-2)
++        if isinstance(quant_method, Qwen3_8FlashNextPLENVFp4EmbeddingMethod):
++            packed_rows = embeddings.unflatten(
++                -1,
++                (self.ple_embedding.ngram_heads, quant_method.packed_row_width),
++            )
++            dequantized = quant_method.dequantize(
++                packed_rows,
++                self.ple_embedding.ngram_embedding.weight_scale_2,
++                output_dtype,
++            )
++            return dequantized.flatten(-2)
+         if not is_fp8(embeddings):
+             return embeddings
+         weight_scale = self._get_embedding_weight_scale()
+--- a/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/ops/qsa.py
++++ b/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/ops/qsa.py
+@@ -39,6 +39,7 @@
+     num_pages,
+     num_requests,
+     score_divisor,
++    k_scale_ptr,
+     PAGE_SIZE: tl.constexpr,
+     PAGE_TABLE_WIDTH: tl.constexpr,
+     NUM_HEADS: tl.constexpr,
+@@ -49,6 +50,7 @@
+     STAGES: tl.constexpr,
+     MAX_N: tl.constexpr,
+     COMPRESS_RATIO: tl.constexpr,
++    KV_QUANT_MODE: tl.constexpr,
+ ) -> None:
+     row = tl.program_id(0)
+     dims = tl.arange(0, BLOCK_D)
+@@ -108,7 +110,10 @@
+             other=0.0,
+             eviction_policy="evict_first",
+         )
++        keys = keys.to(query.dtype)
+         scores = tl.dot(keys, query, out_dtype=tl.float32)
++        if KV_QUANT_MODE:
++            scores *= tl.load(k_scale_ptr)
+         scores = tl.where(heads[None, :] < NUM_HEADS, tl.maximum(scores, 0.0), 0.0)
+         score = tl.sum(scores, axis=1) / score_divisor
+         tl.store(
+@@ -215,6 +220,8 @@
+     num_rows,
+     num_cache_blocks,
+     num_requests,
++    k_scale_ptr,
++    v_scale_ptr,
+     TOPK: tl.constexpr,
+     PAGE_SIZE: tl.constexpr,
+     PAGE_TABLE_WIDTH: tl.constexpr,
+@@ -225,6 +232,7 @@
+     NUM_TILES: tl.constexpr,
+     BLOCK_M: tl.constexpr,
+     BLOCK_N: tl.constexpr,
++    KV_QUANT_MODE: tl.constexpr,
+ ) -> None:
+     row = tl.program_id(0)
+     kv_head = tl.program_id(1)
+@@ -297,7 +305,11 @@
+             mask=valid[:, None],
+             other=0.0,
+         )
++        keys = keys.to(query.dtype)
++        values = values.to(query.dtype)
+         scores = tl.dot(query, keys)
++        if KV_QUANT_MODE:
++            scores *= tl.load(k_scale_ptr)
+         # Scaling scores avoids re-quantizing a scaled query to BF16.
+         scores *= softmax_scale_log2
+         scores = tl.where(valid[None, :], scores, -1.0e20)
+@@ -320,6 +332,8 @@
+         accumulator / tl.maximum(normalizer[:, None], 1.0e-20),
+         0.0,
+     )
++    if KV_QUANT_MODE:
++        normalized_output *= tl.load(v_scale_ptr)
+     output_mask = head_offsets[:, None] < GROUP_SIZE
+     if NUM_SPLITS == 1:
+         tl.store(
+@@ -586,8 +600,46 @@
+         position_values,
+         mask=(row < num_rows) & (position_dims < 3),
+     )
++
++
++_QSA_DEFAULT_SCALE: dict[torch.device, torch.Tensor] = {}
++
++
++def _qsa_scale_ptr(scale, device):
++    """Return a 0-d fp32 scale the kernels can always dereference.
+ 
++    The kernels dereference this only in FP8 mode, but a real tensor keeps the
++    launch signature uniform across both compile-time variants.
++    """
++    if scale is not None:
++        return scale.to(device=device, dtype=torch.float32).reshape(())
++    cached = _QSA_DEFAULT_SCALE.get(device)
++    if cached is None:
++        cached = torch.ones((), dtype=torch.float32, device=device)
++        _QSA_DEFAULT_SCALE[device] = cached
++    return cached
+ 
++
++def _qsa_as_fp8(cache, kv_quant_mode, what):
++    """Reinterpret a uint8 KV allocation as fp8-e4m3 without copying.
++
++    vLLM allocates a quantised KV cache as uint8. Reading it as uint8 in the
++    kernel would silently produce garbage, so refuse that combination loudly
++    rather than returning plausible nonsense.
++    """
++    quantised_dtypes = (torch.uint8, torch.float8_e4m3fn)
++    if kv_quant_mode:
++        if cache.dtype == torch.uint8:
++            return cache.view(torch.float8_e4m3fn)
++        return cache
++    if cache.dtype in quantised_dtypes:
++        raise RuntimeError(
++            f"QSA {what} cache is {cache.dtype} but KV dequantisation is off; "
++            "refusing to read quantised bytes as BF16"
++        )
++    return cache
++
++
+ def _validate_mqa(q: torch.Tensor) -> None:
+     if q.ndim != 3 or q.shape[1] <= 0 or q.shape[2] <= 0:
+         raise ValueError("QSA query must be [rows, heads, head_dim]")
+@@ -603,10 +655,13 @@
+     compress_ratio: int,
+     num_columns: int | None = None,
+     score_scale: float | None = None,
++    k_scale: torch.Tensor | None = None,
++    kv_quant_mode: int = 0,
+ ) -> tuple[torch.Tensor, torch.Tensor]:
+     """Compute QSA scores directly from a paged compressed-key cache."""
+ 
+     _validate_mqa(q)
++    k_cache = _qsa_as_fp8(k_cache, kv_quant_mode, "selector")
+     if not q.is_cuda or not HAS_TRITON:
+         raise RuntimeError("paged QSA scoring requires CUDA and Triton")
+     if k_cache.ndim != 4 or k_cache.shape[2] != 1:
+@@ -667,6 +722,7 @@
+         k_cache.shape[0],
+         page_table.shape[0],
+         float(score_divisor),
++        _qsa_scale_ptr(k_scale, q.device),
+         PAGE_SIZE=k_cache.shape[1],
+         PAGE_TABLE_WIDTH=page_table.shape[1],
+         NUM_HEADS=q.shape[1],
+@@ -677,6 +733,7 @@
+         STAGES=2,
+         MAX_N=MAX_N,
+         COMPRESS_RATIO=compress_ratio,
++        KV_QUANT_MODE=kv_quant_mode,
+         num_warps=2,
+     )
+     return logits, visible_blocks
+@@ -817,8 +874,11 @@
+     block_table: torch.Tensor,
+     token_to_req: torch.Tensor,
+     out: torch.Tensor | None = None,
++    k_scale: torch.Tensor | None = None,
++    v_scale: torch.Tensor | None = None,
++    kv_quant_mode: int = 0,
+ ) -> torch.Tensor:
+-    """Run sparse GQA directly over paged BF16 K/V caches."""
++    """Run sparse GQA directly over paged BF16 or FP8-e4m3 K/V caches."""
+ 
+     if not q.is_cuda or not HAS_TRITON:
+         raise RuntimeError("paged QSA sparse attention requires CUDA and Triton")
+@@ -828,6 +888,8 @@
+         raise ValueError("QSA indices must have one row per query")
+     if token_to_req.shape != (q.shape[0],) or block_table.ndim != 2:
+         raise ValueError("QSA sparse attention metadata has invalid shapes")
++    k_cache = _qsa_as_fp8(k_cache, kv_quant_mode, "key")
++    v_cache = _qsa_as_fp8(v_cache, kv_quant_mode, "value")
+     if not all(k_cache.shape[:3]) or not all(block_table.shape):
+         raise ValueError("QSA sparse attention cache and block table must be nonempty")
+     if logical_indices.shape[1] <= 0:
+@@ -836,7 +898,11 @@
+         raise ValueError("QSA sparse attention requires valid grouped-query heads")
+     head_dim = q.shape[2]
+     assert head_dim >= 16 and (head_dim & (head_dim - 1)) == 0
+-    assert q.dtype == k_cache.dtype == v_cache.dtype == torch.bfloat16
++    assert q.dtype == torch.bfloat16
++    if kv_quant_mode:
++        assert k_cache.dtype == v_cache.dtype == torch.float8_e4m3fn
++    else:
++        assert k_cache.dtype == v_cache.dtype == torch.bfloat16
+     assert logical_indices.dtype == block_table.dtype == torch.int32
+     assert token_to_req.dtype == torch.int32
+     assert q.device == k_cache.device == v_cache.device
+@@ -919,6 +985,8 @@
+         q.shape[0],
+         k_cache.shape[0],
+         block_table.shape[0],
++        _qsa_scale_ptr(k_scale, q.device),
++        _qsa_scale_ptr(v_scale, q.device),
+         TOPK=logical_indices.shape[1],
+         PAGE_SIZE=k_cache.shape[1],
+         PAGE_TABLE_WIDTH=block_table.shape[1],
+@@ -929,6 +997,7 @@
+         NUM_TILES=num_tiles,
+         BLOCK_M=block_m,
+         BLOCK_N=block_n,
++        KV_QUANT_MODE=kv_quant_mode,
+         num_warps=partial_warps,
+         num_stages=2,
+     )
+--- a/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/qsa.py
++++ b/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/qsa.py
+@@ -67,7 +67,12 @@
+     """FullAttentionSpec backend used by the merged QSA owner."""
+ 
+     supported_dtypes: ClassVar[list[torch.dtype]] = [torch.bfloat16]
+-    supported_kv_cache_dtypes: ClassVar[list[CacheDType]] = ["auto", "bfloat16"]
++    supported_kv_cache_dtypes: ClassVar[list[CacheDType]] = [
++        "auto",
++        "bfloat16",
++        "fp8",
++        "fp8_e4m3",
++    ]
+ 
+     @staticmethod
+     def get_name() -> str:
+@@ -97,16 +102,47 @@
+     supports_pcp: bool = False
+ 
+     def __init__(self, *args, **kwargs) -> None:
+-        super().__init__(*args, **kwargs)
++        _real_kv_dtype = None
++        _kv_pos = None
++        if "kv_cache_dtype" in kwargs:
++            _real_kv_dtype = kwargs["kv_cache_dtype"]
++        else:
++            import inspect as _inspect
++
++            _names = list(
++                _inspect.signature(FlashAttentionImpl.__init__).parameters
++            )[1:]
++            if "kv_cache_dtype" in _names:
++                _idx = _names.index("kv_cache_dtype")
++                if _idx < len(args):
++                    _kv_pos = _idx
++                    _real_kv_dtype = args[_idx]
++        if _real_kv_dtype is not None and _real_kv_dtype not in (
++            "auto",
++            "bfloat16",
++        ):
++            if _kv_pos is not None:
++                args = args[:_kv_pos] + ("auto",) + args[_kv_pos + 1 :]
++            else:
++                kwargs = {**kwargs, "kv_cache_dtype": "auto"}
++            super().__init__(*args, **kwargs)
++            self.kv_cache_dtype = _real_kv_dtype
++        else:
++            super().__init__(*args, **kwargs)
+         if not is_flash_attn_varlen_func_available():
+             raise NotImplementedError("Qwen3.8-Flash-Next QSA requires FlashAttention")
+         if self.dcp_world_size != 1:
+             raise NotImplementedError(
+                 "Qwen3.8-Flash-Next QSA does not support decode context parallelism"
+             )
+-        if self.kv_cache_dtype not in ("auto", "bfloat16"):
++        if self.kv_cache_dtype not in (
++            "auto",
++            "bfloat16",
++            "fp8",
++            "fp8_e4m3",
++        ):
+             raise NotImplementedError(
+-                "Qwen3.8-Flash-Next QSA requires a BF16 main KV cache"
++                "Qwen3.8-Flash-Next QSA supports a BF16 or FP8-e4m3 main KV cache"
+             )
+         self.supports_quant_query_input = False
+ 
+@@ -144,8 +180,15 @@
+         key_cache, value_cache = kv_cache.transpose(1, 2).split(self.head_size, dim=-1)
+         key_cache = canonicalize_singleton_dim_strides(key_cache)
+         value_cache = canonicalize_singleton_dim_strides(value_cache)
+-        if key_cache.dtype != torch.bfloat16 or query.dtype != torch.bfloat16:
+-            raise NotImplementedError("Qwen3.8-Flash-Next QSA requires BF16 Q/K/V")
++        kv_quant_mode = (
++            1 if key_cache.dtype in (torch.uint8, torch.float8_e4m3fn) else 0
++        )
++        if query.dtype != torch.bfloat16:
++            raise NotImplementedError("Qwen3.8-Flash-Next QSA requires a BF16 query")
++        if not kv_quant_mode and key_cache.dtype != torch.bfloat16:
++            raise NotImplementedError(
++                "Qwen3.8-Flash-Next QSA requires a BF16 or FP8-e4m3 KV cache"
++            )
+ 
+         from .ops.qsa import qsa_sparse_paged_attention
+ 
+@@ -157,6 +200,9 @@
+             attn_metadata.block_table,
+             token_to_req,
+             output[:num_tokens],
++            k_scale=getattr(layer, "_k_scale", None),
++            v_scale=getattr(layer, "_v_scale", None),
++            kv_quant_mode=kv_quant_mode,
+         )
+         return output
+ 
+@@ -183,9 +229,14 @@
+             raise ValueError("Qwen3.8-Flash-Next QSA requires a paged KV cache")
+         if model_config.dtype != torch.bfloat16:
+             raise NotImplementedError("Qwen3.8-Flash-Next QSA currently requires BF16")
+-        if cache_config.cache_dtype not in ("auto", "bfloat16"):
++        if cache_config.cache_dtype not in (
++            "auto",
++            "bfloat16",
++            "fp8",
++            "fp8_e4m3",
++        ):
+             raise NotImplementedError(
+-                "Qwen3.8-Flash-Next QSA requires a BF16 main KV cache"
++                "Qwen3.8-Flash-Next QSA supports a BF16 or FP8-e4m3 main KV cache"
+             )
+         if getattr(quant_config, "kv_cache_scheme", None) is not None:
+             raise NotImplementedError(
+@@ -286,9 +337,14 @@
+         self.kv_cache_torch_dtype = kv_cache_dtype_str_to_dtype(
+             self.kv_cache_dtype, model_config
+         )
+-        if self.kv_cache_torch_dtype != torch.bfloat16:
++        if self.kv_cache_torch_dtype not in (
++            torch.bfloat16,
++            torch.uint8,
++            torch.float8_e4m3fn,
++        ):
+             raise NotImplementedError(
+-                "Qwen3.8-Flash-Next QSA requires BF16 cache storage"
++                "Qwen3.8-Flash-Next QSA cache storage must be BF16 or FP8-e4m3 "
++                f"(got {self.kv_cache_torch_dtype})"
+             )
+         self.kv_sharing_target_layer_name = None
+         self.kv_cache = torch.tensor([])
+--- a/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/mtp.py
++++ b/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/mtp.py
+@@ -19,7 +19,10 @@
+ import torch
+ from torch import nn
+ 
++import os
++
+ from vllm.compilation.decorators import support_torch_compile
++from vllm.logger import init_logger
+ from vllm.config import VllmConfig, replace, set_current_vllm_config
+ from vllm.distributed import get_pp_group
+ from vllm.model_executor.layers.layernorm import GemmaRMSNorm
+@@ -55,6 +58,64 @@
+ )
+ 
+ 
++logger = init_logger(__name__)
++
++
++def _attach_draft_vocab(model: nn.Module) -> None:
++    """Slice the drafter's lm_head down to VLLM_MTP_DRAFT_VOCAB's token ids.
++
++    The file is one integer token id per line (see files/build_draft_vocab.py).
++    Leaves the full head in place and untouched; only get_top_tokens below
++    reads the slice.
++    """
++    path = os.environ.get("VLLM_MTP_DRAFT_VOCAB", "").strip()
++    if not path:
++        return
++    lm_head = getattr(model, "lm_head", None)
++    weight = getattr(lm_head, "weight", None)
++    if weight is None or weight.dim() != 2:
++        logger.warning("MTP draft vocab: no 2-D lm_head weight; skipping.")
++        return
++    if getattr(lm_head, "tp_size", 1) != 1:
++        logger.warning("MTP draft vocab: TP>1 is unsupported; skipping.")
++        return
++    scale = getattr(model.logits_processor, "scale", 1.0)
++    if scale <= 0.0:
++        logger.warning("MTP draft vocab: non-positive logit scale; skipping.")
++        return
++
++    org_vocab = int(getattr(lm_head, "org_vocab_size", weight.shape[0]))
++    with open(path) as handle:
++        ids = sorted({int(line) for line in handle if line.strip()})
++    ids = [i for i in ids if 0 <= i < org_vocab]
++    if not ids or len(ids) >= org_vocab:
++        logger.warning(
++            "MTP draft vocab: %d usable ids against a %d vocabulary; skipping.",
++            len(ids), org_vocab,
++        )
++        return
++
++    index = torch.tensor(ids, dtype=torch.long, device=weight.device)
++    model.register_buffer(
++        "_draft_lm_head_weight",
++        weight.data.index_select(0, index).contiguous(),
++        persistent=False,
++    )
++    model.register_buffer(
++        "_draft_id_to_target_id",
++        index.to(torch.int32),
++        persistent=False,
++    )
++    full_gib = weight.numel() * weight.element_size() / 2**30
++    cut_gib = model._draft_lm_head_weight.numel() * weight.element_size() / 2**30
++    logger.info(
++        "MTP draft vocab: %d of %d tokens (%.1f%%); draft lm_head %.2f -> %.2f "
++        "GiB per draft step, %.2f GiB saved per step at MTP %d",
++        len(ids), org_vocab, 100.0 * len(ids) / org_vocab, full_gib, cut_gib,
++        (full_gib - cut_gib) * 3, 3,
++    )
++
++
+ def _remap_ignored_layers(
+     ignored_layers: list[str],
+     mtp_start_layer_idx: int,
+@@ -244,6 +305,12 @@
+     def set_skip_topk(self, skip: bool) -> None:
+         """Select on MTP step 0 and reuse its QSA indices on later steps."""
+ 
++        if not getattr(self, "_mtp_index_share_logged", False):
++            self._mtp_index_share_logged = True
++            logger.info(
++                "MTP index share: index_share_for_mtp_iteration ACTIVE "
++                "(set_skip_topk reached the draft QSA indexer)"
++            )
+         for attention in self._iter_qsa_attentions():
+             attention.indexer.skip_topk = skip
+ 
+@@ -429,6 +496,20 @@
+     ) -> torch.Tensor | None:
+         return self.logits_processor(self.lm_head, hidden_states)
+ 
++    def get_top_tokens(self, hidden_states: torch.Tensor) -> torch.Tensor:
++        """Greedy draft token ids, over the reduced vocabulary when present.
++
++        Positive logit scaling and the tanh soft cap are both monotonic, so the
++        argmax is unchanged by skipping them; _attach_draft_vocab refuses to
++        engage when the scale is not positive.
++        """
++        weight = getattr(self, "_draft_lm_head_weight", None)
++        if weight is None:
++            return self.logits_processor.get_top_tokens(self.lm_head, hidden_states)
++        logits = torch.nn.functional.linear(hidden_states.to(weight.dtype), weight)
++        return self._draft_id_to_target_id[logits.argmax(dim=-1)].to(torch.long)
++
++
+     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
+         def remap_weight_names():
+             for name, weight in weights:
+@@ -441,7 +522,9 @@
+             skip_substrs=["hyper_connection_mixer.block_inject_weight"],
+             ignore_unexpected_suffixes=_QWEN38_FLASH_NEXT_IGNORED_MISSING_SUFFIXES.copy(),
+         )
+-        return loader.load_weights(remap_weight_names())
++        loaded = loader.load_weights(remap_weight_names())
++        _attach_draft_vocab(self)
++        return loaded
+ 
+ 
+ __all__ = ["Qwen3_8FlashNextMTP", "Qwen3_8FlashNextMultiTokenPredictor"]
+--- a/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py
++++ b/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py
+@@ -1784,6 +1784,27 @@
+         layer.logical_widths = output_partition_sizes
+         layer.input_size_per_partition = input_size_per_partition
+         layer.output_size_per_partition = output_size_per_partition
++
++        # Downgrade to BF16 emulation for shapes the native MXFP8 GEMM rejects
++        # (e.g. linear_attn.in_proj_a/b, [48, 2560] -> N < 128). Each layer gets
++        # its own ModelOptMxFp8LinearMethod, so this is per-layer.
++        if not _mxfp8_native_kernel_supports(
++            output_size_per_partition, input_size_per_partition
++        ):
++            from vllm.model_executor.kernels.linear.mxfp8.emulation import (
++                EmulationMxfp8LinearKernel,
++            )
++
++            if not isinstance(self.kernel, EmulationMxfp8LinearKernel):
++                logger.warning_once(
++                    "MXFP8 layer [N=%d, K=%d] is not supported by %s "
++                    "(needs N,K >= 128 and divisible by 32); falling back to "
++                    "BF16 emulation for this shape.",
++                    output_size_per_partition,
++                    input_size_per_partition,
++                    type(self.kernel).__name__,
++                )
++                self.kernel = _mxfp8_emulation_kernel()
+ 
+         if input_size_per_partition % MXFP8_BLOCK_SIZE != 0:
+             raise ValueError(
+@@ -1856,6 +1877,45 @@
+         bias: torch.Tensor | None = None,
+     ) -> torch.Tensor:
+         return self.kernel.apply_weights(layer, x, bias)
++
++
++def _mxfp8_emulation_kernel():
++    from vllm.model_executor.kernels.linear.mxfp8.Mxfp8LinearKernel import (
++        Mxfp8LinearLayerConfig,
++    )
++    from vllm.model_executor.kernels.linear.mxfp8.emulation import (
++        EmulationMxfp8LinearKernel,
++    )
++
++    return EmulationMxfp8LinearKernel(Mxfp8LinearLayerConfig())
++
++
++class ModelOptMxFp8EmulationLinearMethod(ModelOptMxFp8LinearMethod):
++    """MXFP8 linear layers forced to BF16 emulation (vision-only dispatch)."""
++
++    def __init__(self, quant_config: ModelOptMxFp8Config) -> None:
++        self.quant_config = quant_config
++        if not self.quant_config.is_checkpoint_mxfp8_serialized:
++            raise ValueError(
++                "MXFP8 currently only supports serialized checkpoints. "
++                "Dynamic quantization is not supported."
++            )
++
++        self.kernel = _mxfp8_emulation_kernel()
++
++
++def _mxfp8_use_vision_emulation(prefix: str) -> bool:
++    return ".visual." in prefix or prefix.startswith("visual.")
++
++
++def _mxfp8_native_kernel_supports(n: int, k: int) -> bool:
++    """Can FlashInfer mm_mxfp8 run an [N, K] weight?
++
++    Measured on GB10/sm_121: N >= 128 and N % 32 == 0 (else "Problem size is
++    not supported"), K >= 128 and K % 32 == 0 (asserted by the kernel). Both
++    are token-count independent.
++    """
++    return n >= 128 and n % 32 == 0 and k >= 128 and k % MXFP8_BLOCK_SIZE == 0
+ 
+ 
+ class ModelOptMxFp8FusedMoE(FusedMoEMethodBase):
+@@ -2367,6 +2427,19 @@
+                 "language_model.model." + prefix[len("model.language_model.") :]
+             )
+ 
++        # NVIDIA's quantized_layers declares the MTP draft layer at its own
++        # local index ("mtp.layers.0...."); the mounted module sits at a
++        # global index after the main model's layers (e.g. "mtp.layers.48
++        # ..."). remap_weight_names() in mtp.py renumbers the weight tensors
++        # to match, but never touches quantized_layers, so bridge it here.
++        # MTP has exactly one local layer, so any numbered mtp layer prefix
++        # may also resolve against index 0.
++        if prefix.startswith("mtp.layers."):
++            rest = prefix[len("mtp.layers.") :]
++            dot = rest.find(".")
++            if dot != -1 and rest[:dot].isdigit() and rest[:dot] != "0":
++                candidates.append("mtp.layers.0." + rest[dot + 1 :])
++
+         return tuple(dict.fromkeys(candidates))
+ 
+     def get_quant_method(
+@@ -2395,6 +2468,8 @@
+             if quant_algo == "W4A16_NVFP4":
+                 return ModelOptNvFp4W4A16LinearMethod(self.w4a16_nvfp4_config)
+             if quant_algo == "MXFP8":
++                if _mxfp8_use_vision_emulation(prefix):
++                    return ModelOptMxFp8EmulationLinearMethod(self.mxfp8_config)
+                 return ModelOptMxFp8LinearMethod(self.mxfp8_config)
+             # Layer not in quantized_layers — leave unquantized
+             return UnquantizedLinearMethod()
+@@ -2405,6 +2480,35 @@
+                     quant_config=self.fp8_config,
+                     moe_config=layer.moe_config,
+                 )
++
++            if quant_algo == "FP8_PB_WO":
++                # NVIDIA's hf_quant_config.json declares this layer as
++                # "FP8_BLOCK_SCALES" (group_size 128); ModelOpt's own config
++                # parsing normalizes that to its internal "FP8_PB_WO" name --
++                # confirmed live (debug logging during bring-up) that
++                # quant_algo actually arrives here as "FP8_PB_WO", not the
++                # raw checkpoint string. ModelOptFp8PbWoLinearMethod already
++                # handles this for Linear layers with _WEIGHT_BLOCK_SIZE =
++                # (128, 128) -- same 128x128 block size verified independently
++                # against this checkpoint's tensors (down_proj weight
++                # [2560, 640] F8_E4M3, weight_scale_inv [20, 5] BF16). There is
++                # no equivalent RoutedExperts method in this vLLM build, so
++                # route to vLLM's native (non-ModelOpt) block-scaled
++                # Fp8MoEMethod instead -- the same class DeepSeek-V3
++                # checkpoints use for identical weight/weight_scale_inv
++                # layout.
++                from vllm.model_executor.layers.quantization.fp8 import (
++                    Fp8Config,
++                    Fp8MoEMethod,
++                )
++
++                return Fp8MoEMethod(
++                    Fp8Config(
++                        is_checkpoint_fp8_serialized=True,
++                        weight_block_size=[128, 128],
++                    ),
++                    layer,
++                )
+             if quant_algo == "NVFP4":
+                 return ModelOptNvFp4FusedMoE(
+                     quant_config=self.nvfp4_config,
+--- a/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/ple_offload_layer.py
++++ b/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/ple_offload_layer.py
+@@ -84,7 +84,8 @@
+         return self._flag_tensor
+ 
+     def reset(self, stream: torch.cuda.Stream | None = None) -> None:
+-        """Enqueue ``WriteValue32(flag=0)`` on ``stream``."""
++        """No-op on GB10 (CAN_USE_STREAM_MEM_OPS=0): host handshake."""
++        return
+         if stream is None:
+             stream = torch.cuda.current_stream()
+         _cuda_check(
+@@ -98,7 +99,8 @@
+         )
+ 
+     def signal(self, stream: torch.cuda.Stream | None = None) -> None:
+-        """Enqueue ``WriteValue32(flag=1)`` on ``stream``."""
++        """No-op on GB10 (CAN_USE_STREAM_MEM_OPS=0): host handshake."""
++        return
+         if stream is None:
+             stream = torch.cuda.current_stream()
+         _cuda_check(
+@@ -112,7 +114,8 @@
+         )
+ 
+     def wait_reset(self, stream: torch.cuda.Stream | None = None) -> None:
+-        """Enqueue ``WaitValue32(flag==0)`` on ``stream``."""
++        """No-op on GB10 (CAN_USE_STREAM_MEM_OPS=0): host handshake."""
++        return
+         if stream is None:
+             stream = torch.cuda.current_stream()
+         _cuda_check(
+@@ -141,7 +144,9 @@
+     gpu_output_buffer: torch.Tensor,
+     hidden_states: torch.Tensor,
+ ) -> None:
+-    """Wait for the CPU result without releasing its output buffer."""
++    """No-op: the connector already blocked the host until the CPU
++    result landed in gpu_output_buffer (GB10 has no stream mem ops)."""
++    return
+     stream = torch.cuda.current_stream()
+     cuda_stream = cuda_driver.CUstream(stream.cuda_stream)
+     dev_ptr = cuda_driver.CUdeviceptr(sem_flag_tensor.data_ptr())
+--- a/usr/local/lib/python3.12/dist-packages/vllm/v1/ple_offload/worker.py
++++ b/usr/local/lib/python3.12/dist-packages/vllm/v1/ple_offload/worker.py
+@@ -20,6 +20,8 @@
+ """
+ 
+ import contextlib
++import json
++import os
+ import multiprocessing.process
+ import pickle
+ import signal
+@@ -74,6 +76,7 @@
+     gpu_output_buffer: torch.Tensor  # IPC-mapped GPU buffer for this TP worker
+     sem: CpuGpuSemaphore  # semaphore paired with gpu_output_buffer
+     copy_stream: torch.cuda.Stream
++    done_flag: torch.Tensor | None = None  # shared CPU int64[1]
+ 
+ 
+ @dataclass
+@@ -388,6 +391,24 @@
+             sorted(offload_layers),
+         )
+         offload_prefixes = tuple(f"{name}." for name in offload_layers)
++
++        # Pre-packed, memory-mapped PLE tables (see patch_ple_offload.py).
++        packed_dir = os.environ.get("VLLM_PLE_PACKED_TABLE_DIR", "")
++        packed_tables: dict[str, str] = {}
++        if packed_dir:
++            for name, layer in offload_layers.items():
++                path = os.path.join(packed_dir, f"{name}.ngram_embedding.packed_u8")
++                if os.path.exists(path) and os.path.exists(path + ".json"):
++                    packed_tables[name] = path
++                    logger.info("PLE %s: using packed mmap table %s", name, path)
++                else:
++                    logger.warning(
++                        "PLE %s: no packed table at %s; loading shards into RAM",
++                        name, path,
++                    )
++        packed_prefixes = tuple(
++            f"{name}.ngram_embedding.shard_" for name in packed_tables
++        )
+ 
+         # Step 3: filter checkpoint tensors before model.load_weights(). The
+         # conditional-generation checkpoint uses HF names such as
+@@ -408,6 +429,10 @@
+                     mapped_names = mapper.apply_list([weight_name])
+                     mapped_name = mapped_names[0] if mapped_names else None
+                 if mapped_name is not None and mapped_name.startswith(offload_prefixes):
++                    if packed_prefixes and mapped_name.startswith(packed_prefixes):
++                        # Served from the mmap table; never touch RAM.
++                        matched_checkpoint_tensors += 1
++                        continue
+                     matched_checkpoint_tensors += 1
+                     yield weight_name, tensor
+ 
+@@ -432,6 +457,14 @@
+                 f"{layer_name}.{param_name}"
+                 for layer_name, layer in offload_layers.items()
+                 for param_name, _ in layer.named_parameters()
++                if not (
++                    layer_name in packed_tables
++                    and param_name
++                    in (("ngram_embedding.weight", "ngram_embedding.weight_scale")
++                        if getattr(layer.ngram_embedding.quant_method,
++                                   "packed_row_width", None) is not None
++                        else ("ngram_embedding.weight",))
++                )
+             }
+             loaded_offload_entries = {
+                 name for name in loaded_params if name.startswith(offload_prefixes)
+@@ -463,12 +496,72 @@
+ 
+         # Step 4: post-load processing is restricted to CPU-owned PLE modules;
+         # the remainder of the model is still on meta and must not be visited.
+-        for layer in offload_layers.values():
++        for name, layer in offload_layers.items():
++            if name in packed_tables:
++                self._attach_packed_table(name, layer, packed_tables[name])
+             process_weights_after_loading(layer, model_config, torch.device("cpu"))
+ 
+         self._layers.update(offload_layers)
+         del model
+         logger.info("PLE weight loading complete.")
++
++    @staticmethod
++    def _attach_packed_table(name: str, layer: PleOffloadLayer, path: str) -> None:
++        """Replace the shard-loaded table with a read-only memory map."""
++        import numpy as np
++
++        meta = json.load(open(path + ".json"))
++        rows, width = int(meta["total_rows"]), int(meta["row_width"])
++        emb = layer.ngram_embedding
++        quant_method = getattr(emb, "quant_method", None)
++        expected_width = getattr(quant_method, "packed_row_width", None)
++        if expected_width is None:
++            if emb.weight.dtype != torch.float8_e4m3fn:
++                raise RuntimeError(f"PLE {name}: unsupported packed dtype {emb.weight.dtype}")
++            expected_width = emb.weight.shape[-1]
++            if meta.get("shard_dtype") != "F8_E4M3" or meta.get("scales_width") != 0:
++                raise RuntimeError(f"PLE {name}: FP8 packed metadata mismatch")
++        elif meta.get("shard_dtype", "U8") != "U8":
++            raise RuntimeError(f"PLE {name}: NVFP4 packed metadata mismatch")
++        if expected_width is not None and expected_width != width:
++            raise RuntimeError(
++                f"PLE {name}: packed table row width {width} != "
++                f"expected {expected_width}"
++            )
++        if emb.weight.shape[0] != rows:
++            raise RuntimeError(
++                f"PLE {name}: packed table has {rows} rows, model expects "
++                f"{emb.weight.shape[0]}"
++            )
++        if os.path.getsize(path) != rows * width:
++            raise RuntimeError(f"PLE {name}: packed table size mismatch")
++        mm = np.memmap(path, dtype=np.uint8, mode="r", shape=(rows, width))
++        # 27 GiB of randomly-accessed rows against a far smaller page
++        # cache. Default mmap behaviour faults in a ~64 KiB window per
++        # touched row (fault-around); nearly all of it is never read.
++        # Declaring the access random makes each fault cost one page.
++        try:
++            import mmap as _mmap_mod
++            mm._mmap.madvise(_mmap_mod.MADV_RANDOM)
++            _advice = "MADV_RANDOM"
++        except Exception as _exc:  # advisory only, never fatal
++            _advice = f"no madvise ({_exc})"
++        table = torch.from_numpy(mm)  # zero-copy, file-backed, evictable
++        emb._packed_table = table
++        emb._packed_table_mmap = mm
++        # Same file, opened for posix_fadvise(WILLNEED): the gather in
++        # ple_layer batches its page reads through this fd so the NVMe
++        # sees them together instead of one fault at a time.
++        emb._packed_table_fd = os.open(path, os.O_RDONLY)
++        # Release the never-touched anonymous allocations.
++        emb.weight.data = torch.empty(0, dtype=emb.weight.dtype)
++        ws = getattr(emb, "weight_scale", None)
++        if ws is not None and ws.dim() == 2:
++            ws.data = torch.empty(0, dtype=ws.dtype)
++        logger.info(
++            "PLE %s: mmap table attached (%d rows x %d B = %.2f GiB) [%s]",
++            name, rows, width, rows * width / 2**30, _advice,
++        )
+ 
+     def accept_registrations(
+         self,
+@@ -536,6 +629,7 @@
+                         registration.sem_flag_tensors[layer_name]
+                     ),
+                     copy_stream=torch.cuda.Stream(device=gpu_buffer.device),
++                    done_flag=registration.done_flag,
+                 )
+                 targets_for_dp.setdefault(layer_name, []).append(target)
+             # All TP ranks in one DP group receive the same input, so buffers
+@@ -643,10 +737,6 @@
+                 # The CPU must not overwrite a GPU output buffer until its
+                 # previous result has been consumed. The GPU runner resets the
+                 # flag after the complete model forward.
+-                for target in targets:
+-                    target.copy_stream.synchronize()
+-                    target.sem.wait_reset(target.copy_stream)
+-
+                 input_bufs = self._input_bufs[dp_rank]
+                 ngram_context = (
+                     input_bufs.ngram_context_buf[: request.num_reqs]
+@@ -669,4 +759,16 @@
+                         target.gpu_output_buffer[slices].copy_(
+                             result[slices], non_blocking=True
+                         )
+-                        target.sem.signal(target.copy_stream)
++
++        # Host-side handshake (GB10 has no stream memory ops): wait for
++        # every layer's DMA to land, then publish the sequence number so
++        # the blocked GPU worker(s) can start their forward.
++        for dp_rank, request in requests_by_dp.items():
++            flags = []
++            for layer_name in self._layers:
++                for target in self._worker_targets[dp_rank][layer_name]:
++                    target.copy_stream.synchronize()
++                    if target.done_flag is not None:
++                        flags.append(target.done_flag)
++            for flag in flags:
++                flag[0] = request.seq
+--- a/usr/local/lib/python3.12/dist-packages/vllm/v1/ple_offload/connector.py
++++ b/usr/local/lib/python3.12/dist-packages/vllm/v1/ple_offload/connector.py
+@@ -5,6 +5,7 @@
+ import os
+ import queue
+ import threading
++import time
+ from multiprocessing.reduction import ForkingPickler
+ from typing import Any
+ 
+@@ -83,6 +84,15 @@
+                 device="cpu",
+             ).share_memory_()
+ 
++        # Host-side completion flag (GB10 has no CUDA stream memory ops).
++        self._done_flag = torch.zeros(1, dtype=torch.int64, device="cpu")
++        self._done_flag.share_memory_()
++        self._seq = 0
++        self._request_socket: zmq.Socket | None = None
++        self._wait_timeout_s = float(
++            os.environ.get("VLLM_PLE_OFFLOAD_STEP_TIMEOUT", "300")
++        )
++
+         # Runner input allocations are address-stable, so bind them once and
+         # pass only batch sizes through the per-forward request queue.
+         self._input_ids_source = input_ids_source
+@@ -120,7 +130,10 @@
+                         self._d2h_stream = torch.cuda.Stream(device=self.device)
+                         self._input_ready_event = torch.cuda.Event()
+                         self._d2h_done_event = torch.cuda.Event()
+-                self._start_request_thread(ipc_addr)
++                # Requests are sent from the model thread so the wait for
++                # the CPU result can immediately follow them.
++                self._request_socket = self._zmq_ctx.socket(zmq.PUSH)
++                self._request_socket.connect(ipc_addr)
+         except Exception:
+             self.close()
+             raise
+@@ -214,6 +227,7 @@
+             input_ids_buf=self._input_ids_buf,
+             query_start_loc_buf=self._query_start_loc_buf,
+             ngram_context_buf=self._ngram_context_buf,
++            done_flag=self._done_flag,
+         )
+ 
+         # ForkingPickler transmits tensors through shared-memory and CUDA IPC.
+@@ -372,21 +386,43 @@
+     ) -> None:
+         """Queue one batch while keeping staging off the model thread."""
+         # Inputs are replicated across TP ranks. One request per DP rank drives
+-        # the CPU result fan-out to every registered TP output buffer.
+-        if self.tp_rank != 0:
+-            return
++        # the CPU result fan-out to every registered TP output buffer. Every
++        # rank then blocks until its own output buffer is complete.
++        self._seq += 1
++        seq = self._seq
++        if self.tp_rank == 0:
++            if self._uses_cuda_inputs:
++                assert self._input_ready_event is not None
++                # The D2H stream waits for runner input production (and for
++                # the previous forward, so the output buffer is free).
++                self._input_ready_event.record(
++                    torch.cuda.current_stream(self.device)
++                )
++            request = PleOffloadRequest(
++                dp_rank=self.dp_rank,
++                num_tokens=num_tokens,
++                num_reqs=num_reqs,
++                seq=seq,
++            )
++            assert self._request_socket is not None
++            self._process_request(request, self._request_socket)
++        self._wait_done(seq)
+ 
+-        if self._uses_cuda_inputs:
+-            assert self._input_ready_event is not None
+-            # The background copy stream waits for runner input production
+-            # without making the model stream wait for D2H completion.
+-            self._input_ready_event.record(torch.cuda.current_stream(self.device))
+-        request = PleOffloadRequest(
+-            dp_rank=self.dp_rank,
+-            num_tokens=num_tokens,
+-            num_reqs=num_reqs,
+-        )
+-        self._request_queue.put_nowait(request)
++    def _wait_done(self, seq: int) -> None:
++        """Block until the CPU worker reports ``seq`` complete."""
++        flag = self._done_flag
++        deadline = time.monotonic() + self._wait_timeout_s
++        spins = 0
++        while int(flag[0]) < seq:
++            spins += 1
++            if spins < 2000:
++                continue
++            time.sleep(0.00005)
++            if time.monotonic() > deadline:
++                raise RuntimeError(
++                    f"PLE offload worker did not complete step {seq} within "
++                    f"{self._wait_timeout_s}s (flag={int(flag[0])})"
++                )
+ 
+     def prepare_forward(
+         self,
+@@ -404,18 +440,16 @@
+         """Locally satisfy PLE waits for dummy and capture forwards."""
+         # Dummy and capture forwards do not send CPU requests, but every PLE
+         # placeholder still waits for a completed output semaphore.
+-        stream = torch.cuda.current_stream(self.device)
+         for layer in self._layers.values():
+             layer._gpu_output_buffer[:num_tokens].zero_()
+-            layer._sem.signal(stream)
+ 
+     def release_outputs(self) -> None:
+         """Mark GPU output buffers reusable after the model consumes them."""
+         # Reset only after the consumer forward so the CPU worker cannot
+         # overwrite an output that a GPU PLE placeholder may still read.
+-        stream = torch.cuda.current_stream(self.device)
+-        for layer in self._layers.values():
+-            layer.release_offloaded_output(stream)
++        # No-op with the host-side handshake: the next request is only
++        # sent after the previous forward completed on the model stream.
++        return
+ 
+     def close(self) -> None:
+         """Stop request transport and release host registrations."""
+@@ -438,6 +472,9 @@
+         self._d2h_done_event = None
+         self._input_ready_event = None
+         self._d2h_stream = None
++        if self._request_socket is not None:
++            self._request_socket.close(linger=0)
++            self._request_socket = None
+         if self._registration_socket is not None:
+             self._registration_socket.close(linger=0)
+             self._registration_socket = None
+--- a/usr/local/lib/python3.12/dist-packages/vllm/v1/ple_offload/protocol.py
++++ b/usr/local/lib/python3.12/dist-packages/vllm/v1/ple_offload/protocol.py
+@@ -26,6 +26,10 @@
+     input_ids_buf: torch.Tensor
+     query_start_loc_buf: torch.Tensor
+     ngram_context_buf: torch.Tensor | None
++    # GB10 host-side handshake: shared CPU int64[1]; the CPU worker
++    # writes the request sequence number here once this worker's GPU
++    # output buffer holds the complete result.
++    done_flag: torch.Tensor | None = None
+ 
+ 
+ @dataclass
+@@ -35,6 +39,7 @@
+     dp_rank: int
+     num_tokens: int
+     num_reqs: int
++    seq: int = 0
+ 
+ 
+ _PLE_OFFLOAD_REQUEST_DECODER = msgspec.msgpack.Decoder(PleOffloadRequest)
