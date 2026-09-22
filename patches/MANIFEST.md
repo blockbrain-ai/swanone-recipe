@@ -12,10 +12,10 @@ image, verified with `docker run --rm` while preparing the filing.
 | 3 | `qsa_nvidia_patched.py` | `/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/qsa.py` | **76** | `748addc85efaa8f7` | `ee5de40742ad48a6064ea24b99a285ff69c47d57bbb170f57c4eef71567a1df3` |
 | 4 | `mtp_patched.py` | `/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/mtp.py` | **85** | `7735cee47d0d1e47` | `8da66d9f48bd93c935d74e2635c45483dc999c87b94bc4ce828e727eb1713349` |
 | 5 | `modelopt_patched.py` | `/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py` | **104** | `3f3ca743fd3c66d7` | `2ad524d557971518564cc3de8e4630b0a822199ad7c45a442ca9a5874c82c8fb` |
-| 6 | `ple_offload_layer.py` | `/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/ple_offload_layer.py` | **13** | `9c0ab215116d0e1b` | `8a0906467764b3fc9b88badedafdecb85880360f5380e314c1f3e6194bdd2df4` |
-| 7 | `worker.py` | `/usr/local/lib/python3.12/dist-packages/vllm/v1/ple_offload/worker.py` | **114** | `f93a0a8c40ee3c53` | `b9919f4c42ede71ba0582f8fe40cd905d848547c9135bca7fdbb72c0cbf43cf0` |
-| 8 | `connector.py` | `/usr/local/lib/python3.12/dist-packages/vllm/v1/ple_offload/connector.py` | **79** | `b911d00cf4a39556` | `9ca076235bb523128ea774215e2d6a42d1a6bfe45ffa3c91323b08dc99814979` |
-| 9 | `protocol.py` | `/usr/local/lib/python3.12/dist-packages/vllm/v1/ple_offload/protocol.py` | **5** | `3e943753e6427c5b` | `cf64579ca3cf1daa9ff617a1a8c4690e0db2d1d7412a74e3b8b32629492a05da` |
+| 6 | `ple_offload/ple_offload_layer.py` | `/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/ple_offload_layer.py` | **13** | `9c0ab215116d0e1b` | `8a0906467764b3fc9b88badedafdecb85880360f5380e314c1f3e6194bdd2df4` |
+| 7 | `ple_offload/worker.py` | `/usr/local/lib/python3.12/dist-packages/vllm/v1/ple_offload/worker.py` | **114** | `f93a0a8c40ee3c53` | `b9919f4c42ede71ba0582f8fe40cd905d848547c9135bca7fdbb72c0cbf43cf0` |
+| 8 | `ple_offload/connector.py` | `/usr/local/lib/python3.12/dist-packages/vllm/v1/ple_offload/connector.py` | **79** | `b911d00cf4a39556` | `9ca076235bb523128ea774215e2d6a42d1a6bfe45ffa3c91323b08dc99814979` |
+| 9 | `ple_offload/protocol.py` | `/usr/local/lib/python3.12/dist-packages/vllm/v1/ple_offload/protocol.py` | **5** | `3e943753e6427c5b` | `cf64579ca3cf1daa9ff617a1a8c4690e0db2d1d7412a74e3b8b32629492a05da` |
 
 **Total changed lines: 1093 across 9 files.**
 

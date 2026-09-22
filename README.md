@@ -39,5 +39,34 @@ Order of operations: **patches -> server -> shim -> harness.** The server alone 
 benchmark's wire format; `shim/typesafe_native_shim.py` is what serves `/v1/systemone`, and it listens on
 **port 8009**.
 
+## Step 4, written out in full — the filing's §5 was only a flag fragment
+
+Filing §5 gives the harness flags but no invocation, which is our error. It is `jevbench`'s own CLI and
+the dataset is yours to choose, so the complete command is:
+
+    python3 -m jevbench.cli run \
+      --tasks <YOUR>/datasets/public/easy.jsonl,<YOUR>/datasets/public/original.jsonl,<YOUR>/datasets/public/hard.jsonl \
+      --adapter typesafe --endpoint http://127.0.0.1:8009 --key-env '' \
+      --model swanone --cost-basis self_hosted_gpu --reserve-usd 0 \
+      --results  <OUT>/results.jsonl \
+      --raw-dir  <OUT>/raw \
+      --ledger   <OUT>/ledger.jsonl \
+      --manifest <OUT>/manifest.json \
+      --run-label swanone --delay-s 0
+
+`--endpoint` must match whatever `SHIM_PORT` the shim was started with (§3 uses 8009). Add
+`--max-model-len`-style limits on your side as your harness requires; nothing in the shim depends on it.
+
+**Two practical notes from running this ourselves on an H100 NVL:**
+
+- **`git` is not installed in the published image; `patch` is.** So the §8.3 route
+  (`patch -p1 -d / < swanOne-vllm-patch.diff`) works inside the container, while a `git clone` does not.
+- **`--max-model-len 4096` is below this benchmark's documented hard tier**, which is described as
+  *"long multi-condition policy documents (2–6k tokens)"*. The longest **public** prompt is 3,946 tokens,
+  but the held-out items are not public, and the benchmark's own rule is that *"an input over a system's
+  documented context limit"* counts **wrong**. If your card can take a larger context, prefer it — we were
+  unable to start 8192 at `--gpu-memory-utilization 0.90` with `--max-num-seqs 6` on a 94 GB card, and the
+  4096 in §4.2 is what we validated.
+
 Nothing here requires credentials. If you would rather have a tarball or a `git diff`, open an issue on the
 benchmark repository and ask — we will put it wherever is easiest for you.
