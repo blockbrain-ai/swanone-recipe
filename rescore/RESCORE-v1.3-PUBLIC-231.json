@@ -1,0 +1,109 @@
+{
+  "what": "JevBench v1.3 rescore of the EXISTING public-231 native-readout run",
+  "no_new_run": true,
+  "source_artefacts": {
+    "per_item": "tmp/jev-survey/shim/score-native-d/per-item.jsonl",
+    "summary_v12": "tmp/jev-survey/shim/score-native-d/summary.json",
+    "results": "tmp/jev-survey/shim/native231d-results.jsonl"
+  },
+  "board_scoring_code": "jevbench/composite_v13.py + jevbench/metrics.py at tag v1.3.0",
+  "population": {
+    "n_public_items": 231,
+    "tiers_present": [
+      "easy",
+      "standard",
+      "hard"
+    ],
+    "tiers_absent": [
+      "judge"
+    ],
+    "judge_weight_renormalised": 0.28
+  },
+  "tiers": {
+    "easy": {
+      "n_correct": 48,
+      "n_public": 48,
+      "accuracy": 1.0
+    },
+    "standard": {
+      "n_correct": 70,
+      "n_public": 72,
+      "accuracy": 0.9722222222222222
+    },
+    "hard": {
+      "n_correct": 86,
+      "n_public": 111,
+      "accuracy": 0.7747747747747747
+    }
+  },
+  "tier_chances_full_frozen_tier": {
+    "easy": 0.28402777777777777,
+    "standard": 0.31666666666666665,
+    "hard": 0.3364393939393939
+  },
+  "tier_chances_public_only": {
+    "easy": 0.284375,
+    "standard": 0.3111111111111111,
+    "hard": 0.33618618618618623
+  },
+  "intelligence": {
+    "v12_rule_plain_weighted_accuracy": 89.53536870203538,
+    "v13_rule_chance_corrected": 84.27668323928339,
+    "per_tier_chance_corrected": {
+      "easy": 100.0,
+      "standard": 95.9349593495935,
+      "hard": 66.0580777146595
+    }
+  },
+  "cross_check_against_v12_summary": {
+    "intelligence_v12_recomputed": 89.53536870203538,
+    "intelligence_v12_in_summary": 89.53536870203538,
+    "intelligence_delta": 0.0,
+    "calibration_recomputed": 79.96014984506645,
+    "calibration_in_summary": 79.96014984506645,
+    "calibration_delta": 0.0,
+    "ece_recomputed": 0.0700258579081982,
+    "ece_in_summary": 0.0700258579081982,
+    "mean_tvd_recomputed": 0.26074528728227453,
+    "mean_tvd_in_summary": 0.26074528728227453,
+    "speed_recomputed_standard72_gpu": 77.87460709380403,
+    "speed_in_summary": 77.87460709380403,
+    "speed_delta": 0.0
+  },
+  "speed_block": {
+    "population": "standard (original) 72 public items",
+    "p50_s_raw": 0.4639443540072534,
+    "p95_s_raw": 0.6817202791804449,
+    "adjusted": "x2 + 0.15 s (non-production, our own server)",
+    "note": "board Speed is the standard+judge 242-decision run; judge is 0 % public"
+  },
+  "cost": {
+    "value_used": 39.29,
+    "status": "ASSUMED, not measured",
+    "basis": "$0.15/M input tokens, $0 output; the readout generates nothing, so output tokens are free by construction",
+    "measured_mean_input_tokens_per_decision": 700.8398268398269,
+    "measured_mean_output_tokens_per_decision": 1.0,
+    "usd_per_1000_from_measured_tokens": 0.10512597402597404,
+    "cost_axis_from_measured_tokens": 39.34869901891838,
+    "why_not_used": "the operator sets the tariff (B-04); 39.29 is our analyst estimate and is carried unchanged so the v1.2 and v1.3 rows are comparable"
+  },
+  "axes_v12_formula": {
+    "intelligence": 89.53536870203538,
+    "calibration": 79.96014984506645,
+    "speed": 77.87460709380403,
+    "cost": 39.29
+  },
+  "axes_v13_formula": {
+    "intelligence": 84.27668323928339,
+    "calibration": 79.96014984506645,
+    "speed": 77.87460709380403,
+    "cost": 39.29
+  },
+  "jevbench_score_v12_formula_with_assumed_cost": 68.41266848851625,
+  "jevbench_score_v13": 67.38523278461915,
+  "near_chance_penalty_applied": false,
+  "sensitivity_public_only_chance": {
+    "intelligence": 84.29482658118349,
+    "jevbench_score_v13": 67.38885921657356
+  }
+}

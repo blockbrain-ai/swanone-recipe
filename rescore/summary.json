@@ -1,0 +1,633 @@
+{
+ "axes": {
+  "calibration": 79.96014984506645,
+  "cost": null,
+  "intelligence": 89.53536870203538,
+  "speed": 77.87460709380403
+ },
+ "axes_if_speed_unaltered": {
+  "calibration": 79.96014984506645,
+  "cost": null,
+  "intelligence": 89.53536870203538,
+  "speed": 77.87460709380403
+ },
+ "by_family": {
+  "adequacy": {
+   "accuracy_failures_and_unattempted_counted_wrong": 0.8333333333333334,
+   "accuracy_over_answered": 0.8333333333333334,
+   "accuracy_over_attempted": 0.8333333333333334,
+   "failure_causes": {},
+   "n_answered_valid": 12,
+   "n_attempted": 12,
+   "n_correct": 10,
+   "n_failed": 0,
+   "n_ok": 12,
+   "n_public": 12
+  },
+  "adversarial": {
+   "accuracy_failures_and_unattempted_counted_wrong": 1.0,
+   "accuracy_over_answered": 1.0,
+   "accuracy_over_attempted": 1.0,
+   "failure_causes": {},
+   "n_answered_valid": 6,
+   "n_attempted": 6,
+   "n_correct": 6,
+   "n_failed": 0,
+   "n_ok": 6,
+   "n_public": 6
+  },
+  "ambiguous": {
+   "accuracy_failures_and_unattempted_counted_wrong": 0.8571428571428571,
+   "accuracy_over_answered": 0.8571428571428571,
+   "accuracy_over_attempted": 0.8571428571428571,
+   "failure_causes": {},
+   "n_answered_valid": 7,
+   "n_attempted": 7,
+   "n_correct": 6,
+   "n_failed": 0,
+   "n_ok": 7,
+   "n_public": 7
+  },
+  "extraction": {
+   "accuracy_failures_and_unattempted_counted_wrong": 1.0,
+   "accuracy_over_answered": 1.0,
+   "accuracy_over_attempted": 1.0,
+   "failure_causes": {},
+   "n_answered_valid": 24,
+   "n_attempted": 24,
+   "n_correct": 24,
+   "n_failed": 0,
+   "n_ok": 24,
+   "n_public": 24
+  },
+  "fact": {
+   "accuracy_failures_and_unattempted_counted_wrong": 1.0,
+   "accuracy_over_answered": 1.0,
+   "accuracy_over_attempted": 1.0,
+   "failure_causes": {},
+   "n_answered_valid": 12,
+   "n_attempted": 12,
+   "n_correct": 12,
+   "n_failed": 0,
+   "n_ok": 12,
+   "n_public": 12
+  },
+  "intent": {
+   "accuracy_failures_and_unattempted_counted_wrong": 1.0,
+   "accuracy_over_answered": 1.0,
+   "accuracy_over_attempted": 1.0,
+   "failure_causes": {},
+   "n_answered_valid": 24,
+   "n_attempted": 24,
+   "n_correct": 24,
+   "n_failed": 0,
+   "n_ok": 24,
+   "n_public": 24
+  },
+  "judge_hard": {
+   "accuracy_failures_and_unattempted_counted_wrong": 0.7058823529411765,
+   "accuracy_over_answered": 0.7058823529411765,
+   "accuracy_over_attempted": 0.7058823529411765,
+   "failure_causes": {},
+   "n_answered_valid": 17,
+   "n_attempted": 17,
+   "n_correct": 12,
+   "n_failed": 0,
+   "n_ok": 17,
+   "n_public": 17
+  },
+  "long_policy": {
+   "accuracy_failures_and_unattempted_counted_wrong": 0.8421052631578947,
+   "accuracy_over_answered": 0.8421052631578947,
+   "accuracy_over_attempted": 0.8421052631578947,
+   "failure_causes": {},
+   "n_answered_valid": 19,
+   "n_attempted": 19,
+   "n_correct": 16,
+   "n_failed": 0,
+   "n_ok": 19,
+   "n_public": 19
+  },
+  "multi_hop": {
+   "accuracy_failures_and_unattempted_counted_wrong": 0.8333333333333334,
+   "accuracy_over_answered": 0.8333333333333334,
+   "accuracy_over_attempted": 0.8333333333333334,
+   "failure_causes": {},
+   "n_answered_valid": 18,
+   "n_attempted": 18,
+   "n_correct": 15,
+   "n_failed": 0,
+   "n_ok": 18,
+   "n_public": 18
+  },
+  "ordinal": {
+   "accuracy_failures_and_unattempted_counted_wrong": 1.0,
+   "accuracy_over_answered": 1.0,
+   "accuracy_over_attempted": 1.0,
+   "failure_causes": {},
+   "n_answered_valid": 12,
+   "n_attempted": 12,
+   "n_correct": 12,
+   "n_failed": 0,
+   "n_ok": 12,
+   "n_public": 12
+  },
+  "policy": {
+   "accuracy_failures_and_unattempted_counted_wrong": 1.0,
+   "accuracy_over_answered": 1.0,
+   "accuracy_over_attempted": 1.0,
+   "failure_causes": {},
+   "n_answered_valid": 12,
+   "n_attempted": 12,
+   "n_correct": 12,
+   "n_failed": 0,
+   "n_ok": 12,
+   "n_public": 12
+  },
+  "probability": {
+   "accuracy_failures_and_unattempted_counted_wrong": 0.8,
+   "accuracy_over_answered": 0.8,
+   "accuracy_over_attempted": 0.8,
+   "failure_causes": {},
+   "n_answered_valid": 10,
+   "n_attempted": 10,
+   "n_correct": 8,
+   "n_failed": 0,
+   "n_ok": 10,
+   "n_public": 10
+  },
+  "routing": {
+   "accuracy_failures_and_unattempted_counted_wrong": 1.0,
+   "accuracy_over_answered": 1.0,
+   "accuracy_over_attempted": 1.0,
+   "failure_causes": {},
+   "n_answered_valid": 12,
+   "n_attempted": 12,
+   "n_correct": 12,
+   "n_failed": 0,
+   "n_ok": 12,
+   "n_public": 12
+  },
+  "routing_hard": {
+   "accuracy_failures_and_unattempted_counted_wrong": 1.0,
+   "accuracy_over_answered": 1.0,
+   "accuracy_over_attempted": 1.0,
+   "failure_causes": {},
+   "n_answered_valid": 5,
+   "n_attempted": 5,
+   "n_correct": 5,
+   "n_failed": 0,
+   "n_ok": 5,
+   "n_public": 5
+  },
+  "temporal_numeric": {
+   "accuracy_failures_and_unattempted_counted_wrong": 0.4,
+   "accuracy_over_answered": 0.4,
+   "accuracy_over_attempted": 0.4,
+   "failure_causes": {},
+   "n_answered_valid": 15,
+   "n_attempted": 15,
+   "n_correct": 6,
+   "n_failed": 0,
+   "n_ok": 15,
+   "n_public": 15
+  },
+  "tool_selection": {
+   "accuracy_failures_and_unattempted_counted_wrong": 1.0,
+   "accuracy_over_answered": 1.0,
+   "accuracy_over_attempted": 1.0,
+   "failure_causes": {},
+   "n_answered_valid": 12,
+   "n_attempted": 12,
+   "n_correct": 12,
+   "n_failed": 0,
+   "n_ok": 12,
+   "n_public": 12
+  },
+  "tradeoff": {
+   "accuracy_failures_and_unattempted_counted_wrong": 0.8333333333333334,
+   "accuracy_over_answered": 0.8333333333333334,
+   "accuracy_over_attempted": 0.8333333333333334,
+   "failure_causes": {},
+   "n_answered_valid": 6,
+   "n_attempted": 6,
+   "n_correct": 5,
+   "n_failed": 0,
+   "n_ok": 6,
+   "n_public": 6
+  },
+  "trap": {
+   "accuracy_failures_and_unattempted_counted_wrong": 0.875,
+   "accuracy_over_answered": 0.875,
+   "accuracy_over_attempted": 0.875,
+   "failure_causes": {},
+   "n_answered_valid": 8,
+   "n_attempted": 8,
+   "n_correct": 7,
+   "n_failed": 0,
+   "n_ok": 8,
+   "n_public": 8
+  }
+ },
+ "calibration": {
+  "ece_bins": [
+   {
+    "accuracy": null,
+    "hi": 0.1,
+    "lo": 0.0,
+    "mean_confidence": null,
+    "n": 0
+   },
+   {
+    "accuracy": null,
+    "hi": 0.2,
+    "lo": 0.1,
+    "mean_confidence": null,
+    "n": 0
+   },
+   {
+    "accuracy": 0.3333333333333333,
+    "hi": 0.3,
+    "lo": 0.2,
+    "mean_confidence": 0.25830918833033456,
+    "n": 3
+   },
+   {
+    "accuracy": 0.6666666666666666,
+    "hi": 0.4,
+    "lo": 0.3,
+    "mean_confidence": 0.35301577540042856,
+    "n": 3
+   },
+   {
+    "accuracy": 0.16666666666666666,
+    "hi": 0.5,
+    "lo": 0.4,
+    "mean_confidence": 0.4517724234725696,
+    "n": 6
+   },
+   {
+    "accuracy": 0.5,
+    "hi": 0.6,
+    "lo": 0.5,
+    "mean_confidence": 0.5297367920599371,
+    "n": 8
+   },
+   {
+    "accuracy": 0.375,
+    "hi": 0.7,
+    "lo": 0.6,
+    "mean_confidence": 0.6474009303072656,
+    "n": 8
+   },
+   {
+    "accuracy": 0.6666666666666666,
+    "hi": 0.8,
+    "lo": 0.7,
+    "mean_confidence": 0.7724158054459895,
+    "n": 9
+   },
+   {
+    "accuracy": 0.8571428571428571,
+    "hi": 0.9,
+    "lo": 0.8,
+    "mean_confidence": 0.8352673647501153,
+    "n": 14
+   },
+   {
+    "accuracy": 0.95,
+    "hi": 1.0,
+    "lo": 0.9,
+    "mean_confidence": 0.9703518276119493,
+    "n": 60
+   }
+  ],
+  "ece_hard": 0.0700258579081982,
+  "ece_n": 111,
+  "ece_population": "hard tier, public items with a valid distribution",
+  "formula": "mean(100*(1-ece/0.5), 100*(1-mean_tvd)) = composite_v12.calibration",
+  "mean_tvd": 0.26074528728227453,
+  "per_item_tvd": [
+   {
+    "task_id": "hard-opus-a-probability-03",
+    "tvd": 0.36146764676864707
+   },
+   {
+    "task_id": "hard-opus-a-probability-04",
+    "tvd": 0.13501053260260804
+   },
+   {
+    "task_id": "hard-opus-a-probability-07",
+    "tvd": 0.1847044420144349
+   },
+   {
+    "task_id": "hard-opus-a-probability-08",
+    "tvd": 0.24257412648584087
+   },
+   {
+    "task_id": "hard-opus-b-probability-01",
+    "tvd": 0.35374891040821244
+   },
+   {
+    "task_id": "hard-opus-b-probability-02",
+    "tvd": 0.25037630180436765
+   },
+   {
+    "task_id": "hard-opus-b-probability-03",
+    "tvd": 0.29659360665541057
+   },
+   {
+    "task_id": "hard-opus-b-probability-04",
+    "tvd": 0.1866225474486285
+   },
+   {
+    "task_id": "hard-opus-b-probability-06",
+    "tvd": 0.26498689719929225
+   },
+   {
+    "task_id": "hard-opus-c-probability-03",
+    "tvd": 0.3313678614353027
+   }
+  ],
+  "probability_fidelity": 73.92547127177255,
+  "probability_items_n": 10,
+  "probability_items_n_on_board": 20,
+  "value": 79.96014984506645
+ },
+ "cost": {
+  "axis_used": null,
+  "blocks": {}
+ },
+ "failures": {
+  "by_family": {},
+  "causes": {},
+  "n_failed": 0,
+  "n_unattempted": 0
+ },
+ "inputs": {
+  "dataset_sha256": {
+   "tmp/jev-survey/fstandhartinger_jevbench/datasets/public/easy.jsonl": "231df3c2c8e88a1a8c137ebe85de96ba70fabd330849098ac7b3c52c70b7172b",
+   "tmp/jev-survey/fstandhartinger_jevbench/datasets/public/hard.jsonl": "89e9e6becb33ed88c1de7d42dcc87531b2fb64cfaef4e1986faf7c37b3f80ebb",
+   "tmp/jev-survey/fstandhartinger_jevbench/datasets/public/original.jsonl": "5c2414edb3006b8bfcb70fda433f0f9ca015759433849f8d3104328a1f7c4180"
+  },
+  "endpoint_kind_for_latency": "gpu",
+  "per_item_file": "<REPO>/tmp/jev-survey/shim/score-native-d/per-item.jsonl",
+  "results_file": "<REPO>/tmp/jev-survey/shim/native231d-results.jsonl",
+  "results_sha256": "04182d08daafadaa0dbfded8ce3bb70ece7cb86adc92ad5071db0b80445aa174",
+  "tariff_note": ""
+ },
+ "intelligence": {
+  "comparable_to_board_row": false,
+  "tier_accuracies_used": {
+   "easy": 1.0,
+   "hard": 0.7747747747747747,
+   "standard": 0.9722222222222222
+  },
+  "tier_weights": {
+   "easy": 0.14,
+   "hard": 0.3,
+   "judge": 0.28,
+   "standard": 0.28
+  },
+  "value": 89.53536870203538,
+  "why": "judge (weight 0.28) absent; remaining weights renormalised by composite_v12.intelligence()"
+ },
+ "jevbench_score_if_speed_unaltered": null,
+ "jevbench_score_renormalised_partial": null,
+ "label": "native-v4",
+ "population": {
+  "n_public_items": 231,
+  "n_records": 231,
+  "note": "PARTIAL SELF-RUN on the 231 public items of 534 scored decisions; unrankable by rule B",
+  "tiers_absent": [
+   "judge"
+  ],
+  "tiers_present": [
+   "easy",
+   "standard",
+   "hard"
+  ]
+ },
+ "presets": null,
+ "speed": {
+  "axis_used": 77.87460709380403,
+  "blocks": {
+   "all_231_public": {
+    "all_attempts": {
+     "p50_s_adjusted": 1.2820805840659886,
+     "p50_s_raw": 0.5660402920329943,
+     "p95_s_adjusted": 3.878858415968716,
+     "p95_s_raw": 1.864429207984358,
+     "speed_axis": 73.03380749252659
+    },
+    "n_latency": 231,
+    "n_rows": 231,
+    "ok_only": {
+     "p50_s_adjusted": 1.2820805840659886,
+     "p50_s_raw": 0.5660402920329943,
+     "p95_s_adjusted": 3.878858415968716,
+     "p95_s_raw": 1.864429207984358,
+     "speed_axis": 73.03380749252659
+    }
+   },
+   "hard_111_public": {
+    "all_attempts": {
+     "p50_s_adjusted": 1.6397348339436575,
+     "p50_s_raw": 0.7448674169718288,
+     "p95_s_adjusted": 3.9904498750460333,
+     "p95_s_raw": 1.9202249375230167,
+     "speed_axis": 71.84204517330056
+    },
+    "n_latency": 111,
+    "n_rows": 111,
+    "ok_only": {
+     "p50_s_adjusted": 1.6397348339436575,
+     "p50_s_raw": 0.7448674169718288,
+     "p95_s_adjusted": 3.9904498750460333,
+     "p95_s_raw": 1.9202249375230167,
+     "speed_axis": 71.84204517330056
+    }
+   },
+   "standard_original_72_(board's standard tier, judge absent)": {
+    "all_attempts": {
+     "p50_s_adjusted": 1.0778887080145068,
+     "p50_s_raw": 0.4639443540072534,
+     "p95_s_adjusted": 1.5134405583608896,
+     "p95_s_raw": 0.6817202791804449,
+     "speed_axis": 77.87460709380403
+    },
+    "n_latency": 72,
+    "n_rows": 72,
+    "ok_only": {
+     "p50_s_adjusted": 1.0778887080145068,
+     "p50_s_raw": 0.4639443540072534,
+     "p95_s_adjusted": 1.5134405583608896,
+     "p95_s_raw": 0.6817202791804449,
+     "speed_axis": 77.87460709380403
+    }
+   },
+   "standard_plus_judge_(board's 242-decision speed run)": {
+    "NOTE": "UNAVAILABLE: judge tier is 0% public; this is the population the board's Speed axis is defined on"
+   }
+  }
+ },
+ "tiers": {
+  "easy": {
+   "accuracy_over_attempted": 1.0,
+   "accuracy_over_public_items": 1.0,
+   "accuracy_over_valid": 1.0,
+   "by_family": {
+    "extraction": {
+     "accuracy": 1.0,
+     "correct": 12,
+     "n": 12
+    },
+    "fact": {
+     "accuracy": 1.0,
+     "correct": 12,
+     "n": 12
+    },
+    "intent": {
+     "accuracy": 1.0,
+     "correct": 12,
+     "n": 12
+    },
+    "tool_selection": {
+     "accuracy": 1.0,
+     "correct": 12,
+     "n": 12
+    }
+   },
+   "coverage_of_full_tier": 0.6666666666666666,
+   "coverage_of_public_set": 1.0,
+   "n_attempted": 48,
+   "n_correct": 48,
+   "n_full_tier_on_board": 72,
+   "n_invalid_or_failed": 0,
+   "n_ok": 48,
+   "n_public_items": 48,
+   "n_renormalized": 0,
+   "n_valid_distribution": 48,
+   "tier_accuracy_used_for_axes": 1.0,
+   "tier_denominator": "public"
+  },
+  "hard": {
+   "accuracy_over_attempted": 0.7747747747747747,
+   "accuracy_over_public_items": 0.7747747747747747,
+   "accuracy_over_valid": 0.7747747747747747,
+   "by_family": {
+    "adversarial": {
+     "accuracy": 1.0,
+     "correct": 6,
+     "n": 6
+    },
+    "ambiguous": {
+     "accuracy": 0.8571428571428571,
+     "correct": 6,
+     "n": 7
+    },
+    "judge_hard": {
+     "accuracy": 0.7058823529411765,
+     "correct": 12,
+     "n": 17
+    },
+    "long_policy": {
+     "accuracy": 0.8421052631578947,
+     "correct": 16,
+     "n": 19
+    },
+    "multi_hop": {
+     "accuracy": 0.8333333333333334,
+     "correct": 15,
+     "n": 18
+    },
+    "probability": {
+     "accuracy": 0.8,
+     "correct": 8,
+     "n": 10
+    },
+    "routing_hard": {
+     "accuracy": 1.0,
+     "correct": 5,
+     "n": 5
+    },
+    "temporal_numeric": {
+     "accuracy": 0.4,
+     "correct": 6,
+     "n": 15
+    },
+    "tradeoff": {
+     "accuracy": 0.8333333333333334,
+     "correct": 5,
+     "n": 6
+    },
+    "trap": {
+     "accuracy": 0.875,
+     "correct": 7,
+     "n": 8
+    }
+   },
+   "coverage_of_full_tier": 0.5045454545454545,
+   "coverage_of_public_set": 1.0,
+   "n_attempted": 111,
+   "n_correct": 86,
+   "n_full_tier_on_board": 220,
+   "n_invalid_or_failed": 0,
+   "n_ok": 111,
+   "n_public_items": 111,
+   "n_renormalized": 0,
+   "n_valid_distribution": 111,
+   "tier_accuracy_used_for_axes": 0.7747747747747747,
+   "tier_denominator": "public"
+  },
+  "standard": {
+   "accuracy_over_attempted": 0.9722222222222222,
+   "accuracy_over_public_items": 0.9722222222222222,
+   "accuracy_over_valid": 0.9722222222222222,
+   "by_family": {
+    "adequacy": {
+     "accuracy": 0.8333333333333334,
+     "correct": 10,
+     "n": 12
+    },
+    "extraction": {
+     "accuracy": 1.0,
+     "correct": 12,
+     "n": 12
+    },
+    "intent": {
+     "accuracy": 1.0,
+     "correct": 12,
+     "n": 12
+    },
+    "ordinal": {
+     "accuracy": 1.0,
+     "correct": 12,
+     "n": 12
+    },
+    "policy": {
+     "accuracy": 1.0,
+     "correct": 12,
+     "n": 12
+    },
+    "routing": {
+     "accuracy": 1.0,
+     "correct": 12,
+     "n": 12
+    }
+   },
+   "coverage_of_full_tier": 0.75,
+   "coverage_of_public_set": 1.0,
+   "n_attempted": 72,
+   "n_correct": 70,
+   "n_full_tier_on_board": 96,
+   "n_invalid_or_failed": 0,
+   "n_ok": 72,
+   "n_public_items": 72,
+   "n_renormalized": 0,
+   "n_valid_distribution": 72,
+   "tier_accuracy_used_for_axes": 0.9722222222222222,
+   "tier_denominator": "public"
+  }
+ }
+}
