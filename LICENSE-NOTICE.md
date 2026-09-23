@@ -9,11 +9,8 @@
 | `assets/draft_vocab_en_code_47k.txt` | data, no copyright claimed | 47,172 integer token ids produced by a tokenizer |
 | **MiaAI Lab's scripts** | **AGPL-3.0-or-later** | we do **not** redistribute them |
 
-**This notice has now been wrong in both directions, so here is what is actually true.** It first said
-Apache-2.0 without crediting MiaAI Lab. It was then corrected to AGPL-3.0-or-later on the reasoning that
-the patch code came from their **AGPL-3.0** generators. That was too pessimistic, on their own documented
-terms — see below. The position above is the one we are distributing under, and it rests on their README
-rather than on anything we have agreed with them directly.
+**The position above is the one we distribute under.** It follows MiaAI Lab's own README rather than an
+agreement with them; we have not asked them to confirm it.
 
 ## `patches/` — Apache-2.0, and MiaAI Lab's work
 
@@ -60,10 +57,9 @@ quantized with NVIDIA's Model Optimizer; serving it means accepting those terms 
 
 ## If you are MiaAI Lab
 
-This repository is built on your recipe and we got the credit wrong before we got it right. We currently
-believe, from your README, that the patch output is an Apache-2.0 work and that we are distributing it on
-those terms. **If you disagree, or want different wording, or want the patch files removed, please open an
-issue and we will do exactly that.** We would also rather credit you the way you want to be credited.
+This repository is built on your recipe. We read the patch output as an Apache-2.0 work, following your
+README. **If you read it differently, want the credit worded another way, or want the patch files
+removed, open an issue and we will do exactly that.**
 
 ## Full credits
 

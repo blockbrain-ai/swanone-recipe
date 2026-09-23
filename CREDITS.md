@@ -24,32 +24,25 @@ That repository is the reason this one can exist at all. From it we drew:
 - **The FP8-KV cache path** for quantized attention caches.
 
 **Thank you, Mia and team.** The recipe is the reason this repository exists. We did not adapt it or
-reimplement it — **all nine files under `patches/` are your patch output**, and we verified that
-byte-for-byte: your five generators (`files/patch_*.py`) reproduce every one of our nine files exactly
-from the same pre-patch originals, with every anchor matching exactly once. There is no part of the
-patch code here that is ours. What is ours is the packaging and the shim, nothing more.
+reimplement it — **all nine files under `patches/` are your patch output**, verified byte-for-byte: your
+five generators (`files/patch_*.py`) reproduce every one of our nine files exactly from the same
+pre-patch originals, with every anchor matching exactly once. There is no part of the patch code here
+that is ours. What is ours is the packaging and the shim.
 
-That is the honest accounting, and it is also why the licence sentence below matters so much more than
-a footnote.
+**Licence:** `patches/` is distributed here as **Apache-2.0** — modified vLLM source, and an Apache-2.0
+work by your own README, which licenses the *generators* under AGPL-3.0-or-later and states that the
+files they generate "keep vLLM's own Apache-2.0 headers and remain Apache-2.0 works". **Your AGPL scripts
+are not redistributed here at all.** If you read that differently, tell us and we will change it.
 
-**We got the credit wrong first, and then over-corrected the licence, and we are sorry for both.** We
-originally published these files as Apache-2.0 without crediting you at all. We then read your
-`LICENSE` and concluded the output had to be AGPL-3.0-or-later, and restated it as such — too
-pessimistic, on your own README, which draws the line at the generators: *"Those generated files keep
-vLLM's own Apache-2.0 headers and remain Apache-2.0 works."* Since what we ship is that generated
-output, `patches/` is **Apache-2.0**, and **your AGPL scripts are not redistributed here at all**. If
-you would rather the output carried AGPL-3.0, or want any of this worded differently, tell us and we
-will change it.
-
-We would also like to thank you for the *manner* of the work, which taught us something. Every claim in
-that repository is measured on named hardware and reported with its failures attached —
-`NV_ERR_NO_MEMORY` counts, peak driver memory against budget, the reserve cells that did not work. And
-when you took an idea from someone else you said so precisely: the FP8-KV approach is credited to
+We would also like to thank you for the *manner* of the work. Every claim in that repository is measured
+on named hardware and reported with its failures attached — `NV_ERR_NO_MEMORY` counts, peak driver memory
+against budget, the reserve cells that did not work. And when you took an idea from someone else you said
+so precisely: the FP8-KV approach is credited to
 [`lancelind/qwen3.8-Flash-DGX`](https://github.com/lancelind/qwen3.8-Flash-DGX) as *"reimplemented here
-against this image's own sources. That credit applies to this one patch; nothing else in this
-repository derives from that project."* That sentence is the standard we are now trying to meet.
+against this image's own sources. That credit applies to this one patch; nothing else in this repository
+derives from that project."* That sentence is the standard we are trying to meet.
 [`oscarmenendezgarcia`](https://github.com/oscarmenendezgarcia) is credited by name for the
-Spanish-extended draft vocabulary and the audit gate. We noticed, and we have copied the habit.
+Spanish-extended draft vocabulary and the audit gate.
 
 ## Models
 
@@ -78,10 +71,7 @@ To be exact about the part we can claim — and it is deliberately a short list:
   `swanOne-vllm-patch.diff`, and the verification that applying it reproduces all nine files
   byte-for-byte.
 
-**None of the patch code is ours.** MiaAI Lab's generators reproduce all nine files exactly. An earlier
-draft of this file said "mixed authorship" and listed vLLM's retained headers and the packaging as
-evidence of our own work on the patches; that was wrong. Retained headers are what a rewriting generator
-produces, and packaging is not authorship of the code.
+**None of the patch code is ours.** MiaAI Lab's generators reproduce all nine files exactly.
 
 ## Licence compatibility
 
