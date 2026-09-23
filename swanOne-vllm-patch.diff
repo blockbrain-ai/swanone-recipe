@@ -1,7 +1,8 @@
 swanOne: vLLM patch set for JevBench bench request
 
-Nine files, Apache-2.0, modifications to vLLM's own code. 1093 changed lines
-(git diff --numstat, summed).
+Nine files, modifications to vLLM's own code and to MiaAI Lab's AGPL-3.0 patch set
+(see LICENSE-NOTICE.md and CREDITS.md). 1093 changed lines (git diff --numstat,
+summed).
 
 Baseline = the published vllm/vllm-openai:qwen38-flash-next image, linux/amd64 child
 sha256:0aea30240f3e3d9ffae8526643950e170eb5fa07fc427016a9dd90892afa2aa3.

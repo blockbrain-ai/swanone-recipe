@@ -1,9 +1,11 @@
 # swanOne patch set — MANIFEST
 
-Nine files, Apache-2.0, modifications to vLLM's own code. Mount each file over the target path
-inside `vllm/vllm-openai:qwen38-flash-next`. Line counts are `git diff --no-index --numstat` against
-the pre-patch original; the in-image column is the sha256 of the *unpatched* file inside the published
-image, verified with `docker run --rm` while preparing the filing.
+Nine files, modifications to vLLM's own code **and to MiaAI Lab's AGPL-3.0 patch set** — see
+`../LICENSE-NOTICE.md` and `../CREDITS.md`; the set is not ours to license as a whole. Mount each file
+over the target path inside `vllm/vllm-openai:qwen38-flash-next`. Line counts are
+`git diff --no-index --numstat` against the pre-patch original; the in-image column is the sha256 of
+the *unpatched* file inside the published image, verified with `docker run --rm` while preparing the
+filing.
 
 | # | file | target inside the image | changed lines | in-image sha256 (16) | patched sha256 (full) |
 |---|---|---|---|---|---|
