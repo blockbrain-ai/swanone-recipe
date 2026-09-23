@@ -30,10 +30,25 @@ directly. `LICENSE-NOTICE.md` has the detail and `CREDITS.md` names everyone who
                   patches/orig/         pre-patch originals for the 4 ple_offload files
     assets/     draft_vocab_en_code_47k.txt — 47,172-token MTP draft vocabulary (optional; see §4.6)
     shim/       typesafe_native_shim.py — implements /v1/systemone over vLLM logprobs
+    rescore/    the filed run, per item, and its v1.3 rescore (see rescore/README.md)
+    baselines/  the same model writing its answer out, reasoning on and off (see baselines/README.md)
 
 Order of operations: patches -> server (filing §4.2) -> shim (filing §3) -> harness (filing §5).
 
 Nothing here needs credentials. Do not commit a HuggingFace token into this tree.
+
+## What one decision costs
+
+Same model, JevBench's public items, tokens generated per decision:
+
+| how the decision is answered | tokens generated per decision |
+|---|---:|
+| reasoning on, answer written out | 714.3 on average — 13 of 173 stopped at the 4,096-token cap |
+| reasoning off, answer written as JSON | 49.9 on average |
+| the one-token readout in `shim/` | 1 — 231 of 231 |
+
+The prompt (about 700 tokens) is read in every case; the readout removes the generation. Re-derive all
+three with `python3 baselines/tokens.py`.
 
 ## How to use this repository
 
