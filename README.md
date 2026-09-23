@@ -8,15 +8,16 @@ None of this would run without **[MiaAI Lab](https://x.com/MiaAI_lab)**'s
 [`Qwen3.8-Flash-Next-Single-DGX-Spark`](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark).
 Serving a 99 GiB NVFP4 model from one Spark's unified memory is their work: the PLE CPU-offload
 machinery and the GB10 stream-memory diagnosis behind it, the memory-mapped packed PLE table, the MTP
-draft-vocabulary index we still drive through `VLLM_MTP_DRAFT_VOCAB`, the MXFP8 kernel fallbacks and
-the FP8-KV cache path. We drew on all of it. **Thank you, Mia and team** — the measurements, the
-failure counts and the willingness to publish the cells that did not work are what made this possible
-from the outside.
+draft-vocabulary index, the MXFP8 kernel fallbacks and the FP8-KV cache path. **Thank you, Mia and
+team** — the measurements, the failure counts and the willingness to publish the cells that did not
+work are what made this possible from the outside.
 
-Their recipe is **AGPL-3.0**. Our patch set derives in part from it, so the patch set is **not**
-Apache-2.0 and this repository is not offered under a single licence. `LICENSE-NOTICE.md` states the
-current position; `CREDITS.md` has the full list and the evidence. We had this wrong and are
-correcting it.
+To be exact: **the nine files in `patches/` are their patch output, not our engineering.** Their
+generators reproduce all nine of our files byte-for-byte. What is ours is the packaging and the shim.
+
+Their recipe is **AGPL-3.0-or-later**, so `patches/` is **AGPL-3.0-or-later** (`LICENSE-AGPL-3.0`).
+We first published it as Apache-2.0; that was wrong and `LICENSE-NOTICE.md` corrects it. `shim/` is
+ours and stays Apache-2.0. `CREDITS.md` has the full list.
 
     patches/    the nine patched vLLM files, each mounted over an absolute path in the image,
                 with the pre-patch originals so the diff is reproducible

@@ -8,16 +8,16 @@ Three different bodies of work sit here, under three different sets of terms:
 |---|---|---|
 | the native-readout shim (`shim/`) | Apache-2.0 | `LICENSE-APACHE-2.0` |
 | the vLLM sources the patches modify | Apache-2.0 | upstream vLLM |
-| **the patch set (`patches/`)** | **partly AGPL-3.0 — not ours to relicense** | `LICENSE-NOTICE.md` |
+| **the patch set (`patches/`)** | **AGPL-3.0-or-later** | `LICENSE-AGPL-3.0` |
 
-`patches/` derives in part from **MiaAI Lab's AGPL-3.0**
-[`Qwen3.8-Flash-Next-Single-DGX-Spark`](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark)
-recipe. Because AGPL-3.0 code cannot be relicensed by us, **`patches/` as a whole is not offered under
-Apache-2.0**, and an earlier version of this repository said that it was. `LICENSE-NOTICE.md` states the
-current position and the plan to resolve it; `CREDITS.md` names everyone whose work is here.
+`patches/` is **MiaAI Lab's patch output**, from their AGPL-3.0-or-later recipe
+[`Qwen3.8-Flash-Next-Single-DGX-Spark`](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark).
+Their generators reproduce all nine of our files byte-for-byte, so **`patches/` is AGPL-3.0-or-later**
+and not ours to license otherwise. An earlier version of this repository called it Apache-2.0;
+`LICENSE-NOTICE.md` corrects that and `CREDITS.md` names everyone whose work is here.
 
-The Apache-2.0 text is kept at `LICENSE-APACHE-2.0` and applies to the shim and to our own original
-code — **not** to `patches/`.
+The Apache-2.0 text is at `LICENSE-APACHE-2.0` and applies to the shim and to our own original code —
+**not** to `patches/`.
 
 If you are here to use the patch set, read `LICENSE-NOTICE.md` first. If you are MiaAI Lab and you want
 something changed about how your work is described here, please open an issue and we will change it.

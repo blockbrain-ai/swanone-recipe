@@ -23,29 +23,30 @@ That repository is the reason this one can exist at all. From it we drew:
   divisibility limits on sm_121.
 - **The FP8-KV cache path** for quantized attention caches.
 
-This is derivation and not resemblance, and it is checkable: thirteen of MiaAI Lab's private helper
-names appear in our patches, and six of them — `_mxfp8_use_vision_emulation`,
-`_ple_prefetch_rows`, `_dequant_nvfp4_rows`, `_qsa_as_fp8`, `_attach_draft_vocab` and
-`_ple_dtype_is_nvfp4` among them — exist nowhere in upstream vLLM. Three environment variables we
-use (`VLLM_MTP_DRAFT_VOCAB`, `VLLM_PLE_OFFLOAD_STEP_TIMEOUT`, `VLLM_PLE_PACKED_TABLE_DIR`) are also
-absent from upstream vLLM and present in their patches. Two comments in our own shipped files still
-point at *their* filenames (`files/build_draft_vocab.py`, `files/build_ple_packed_table.py`), which
-was the tell.
+**Thank you, Mia and team.** The recipe is the reason this repository exists. We did not adapt it or
+reimplement it — **all nine files under `patches/` are your patch output**, and we verified that
+byte-for-byte: your five generators (`files/patch_*.py`) reproduce every one of our nine files exactly
+from the same pre-patch originals, with every anchor matching exactly once. There is no part of the
+patch code here that is ours. What is ours is the packaging and the shim, nothing more.
 
-**We got the licence line wrong, and we are sorry about it.** We published these patches as
-Apache-2.0. Mia's work is **AGPL-3.0**, and we cannot relicense it. `LICENSE-NOTICE.md` now says so,
-and we are correcting the licensing. That correction is the least we owe, and it is later than it
+That is the honest accounting, and it is also why the licence sentence below matters so much more than
+a footnote.
+
+**We got the licence wrong, and we are sorry about it.** We first published these files as
+Apache-2.0. Your recipe is **AGPL-3.0-or-later**, and we cannot relicense it. `patches/` is now
+distributed under **AGPL-3.0-or-later** with the full text in `LICENSE-AGPL-3.0`, and
+`LICENSE-NOTICE.md` states the position. The correction is the least we owe, and it is later than it
 should have been.
 
-We would also like to thank Mia's team for the *manner* of the work, which taught us something. Every
-claim in that repository is measured on named hardware and reported with its failures attached —
-`NV_ERR_NO_MEMORY` counts, peak driver memory against budget, the cells that did not work. And when
-they took an idea from someone else they said so precisely: the FP8-KV approach is credited to
-[`lancelind/qwen3.8-Flash-DGX`](https://github.com/lancelind/qwen3.8-Flash-DGX) as *"reimplemented
-here against this image's own sources. That credit applies to this one patch; nothing else in this
+We would also like to thank you for the *manner* of the work, which taught us something. Every claim in
+that repository is measured on named hardware and reported with its failures attached —
+`NV_ERR_NO_MEMORY` counts, peak driver memory against budget, the reserve cells that did not work. And
+when you took an idea from someone else you said so precisely: the FP8-KV approach is credited to
+[`lancelind/qwen3.8-Flash-DGX`](https://github.com/lancelind/qwen3.8-Flash-DGX) as *"reimplemented here
+against this image's own sources. That credit applies to this one patch; nothing else in this
 repository derives from that project."* That sentence is the standard we are now trying to meet.
 [`oscarmenendezgarcia`](https://github.com/oscarmenendezgarcia) is credited by name for the
-Spanish-extended draft vocabulary and the audit gate. We noticed, and we copied the habit.
+Spanish-extended draft vocabulary and the audit gate. We noticed, and we have copied the habit.
 
 ## Models
 
@@ -66,19 +67,25 @@ Spanish-extended draft vocabulary and the audit gate. We noticed, and we copied 
 
 ## Our own contribution
 
-To be exact about the part we can claim:
+To be exact about the part we can claim — and it is deliberately a short list:
 
-- **The native-readout shim** (`shim/typesafe_native_shim.py`) — original to this repository.
+- **The native-readout shim** (`shim/typesafe_native_shim.py`) — original to this repository, Apache-2.0.
 - **The scoring and rescoring** (`rescore/`) — our harness invocation and per-item output.
-- **The packaging** — `patches/MANIFEST.md` (per-file sha256 against the pristine image),
+- **The packaging** — `patches/MANIFEST.md` (per-file sha256 against the published image),
   `swanOne-vllm-patch.diff`, and the verification that applying it reproduces all nine files
   byte-for-byte.
 
-Everything else in `patches/` is vLLM's or MiaAI Lab's.
+**None of the patch code is ours.** MiaAI Lab's generators reproduce all nine files exactly. An earlier
+draft of this file said "mixed authorship" and listed vLLM's retained headers and the packaging as
+evidence of our own work on the patches; that was wrong. Retained headers are what a rewriting generator
+produces, and packaging is not authorship of the code.
 
-## A note on licence compatibility
+## Licence compatibility
 
-Because MiaAI Lab's recipe is AGPL-3.0-or-later, and this server is offered over a network, AGPL
-section 13 applies to the derived patches: users interacting with it over a network are entitled to
-the corresponding source. That is part of why the correction above matters, and not only a matter of
-manners.
+Some lines that MiaAI Lab's recipe patches are **Apache-2.0 vLLM** work, in open pull requests #53899,
+#53908, #53960, #54070 and #54129. Apache-2.0 code may be combined into an AGPL work, so the set as a
+whole is **AGPL-3.0-or-later**. The reverse would not have been possible.
+
+AGPL §13 binds whoever runs the modified version for remote users. Our own endpoint is not public, so
+that duty is not ours today; if you run this as a network service, it is yours. The corresponding source
+is this repository, so the offer is satisfied by pointing here.
