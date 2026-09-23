@@ -14,6 +14,6 @@ our files byte-for-byte. Their recipe licenses the *generators* under AGPL-3.0-o
 the files they generate "keep vLLM's own Apache-2.0 headers and remain Apache-2.0 works", so we
 distribute the output under Apache-2.0 on those terms. **Their AGPL scripts are not redistributed here.**
 
-We have asked MiaAI Lab to confirm that reading. If they would rather this carried a different licence or
+This reading is ours, drawn from their README; we have not agreed it with them directly. If they would rather this carried a different licence or
 different wording, open an issue and we will change it. `LICENSE-NOTICE.md` has the detail; `CREDITS.md`
 names everyone whose work is here.

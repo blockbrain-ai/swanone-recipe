@@ -12,8 +12,8 @@
 **This notice has now been wrong in both directions, so here is what is actually true.** It first said
 Apache-2.0 without crediting MiaAI Lab. It was then corrected to AGPL-3.0-or-later on the reasoning that
 the patch code came from their **AGPL-3.0** generators. That was too pessimistic, on their own documented
-terms — see below. The position above is the one we are distributing under, and we have asked MiaAI Lab to
-confirm it.
+terms — see below. The position above is the one we are distributing under, and it rests on their README
+rather than on anything we have agreed with them directly.
 
 ## `patches/` — Apache-2.0, and MiaAI Lab's work
 
@@ -42,8 +42,8 @@ from their repository, under their licence.
 Some of the lines the recipe patches are themselves Apache-2.0 vLLM work, in open pull requests #53899,
 #53908, #53960, #54070 and #54129.
 
-**We have asked MiaAI Lab to confirm this reading.** If they would rather the output carried AGPL-3.0, or
-want the wording changed, we will change it — see below.
+**This reading is ours, and we intend to ask MiaAI Lab to confirm it.** If they would rather the output
+carried AGPL-3.0, or want the wording changed, we will change it — see below.
 
 ## `shim/` — MIT
 

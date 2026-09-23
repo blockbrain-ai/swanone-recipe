@@ -18,8 +18,8 @@ generators reproduce all nine of our files byte-for-byte. What is ours is the pa
 Their recipe licenses its **generators** under AGPL-3.0-or-later, but it also states that the files they
 generate "keep vLLM's own Apache-2.0 headers and remain Apache-2.0 works" — and our nine files are that
 output. So `patches/` is **Apache-2.0**, and **none of their AGPL scripts are redistributed here**.
-`shim/` is ours and is MIT. We have asked them to confirm that reading. `LICENSE-NOTICE.md` has the
-detail and `CREDITS.md` names everyone whose work is here.
+`shim/` is ours and is MIT. That reading is ours, from their README — we have not agreed it with them
+directly. `LICENSE-NOTICE.md` has the detail and `CREDITS.md` names everyone whose work is here.
 
     patches/    the nine patched vLLM files, each mounted over an absolute path in the image,
                 with the pre-patch originals so the diff is reproducible
