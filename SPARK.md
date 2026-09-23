@@ -32,10 +32,16 @@ git clone https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark
 cd Qwen3.8-Flash-Next-Single-DGX-Spark
 git checkout 6b50864              # the commit whose patch output is in our patches/
 cp .env.sample .env
+mkdir -p logs/archive && touch logs/archive/00000000T000000-container.log   # see the first note below
 ./download.sh                     # the ~99 GiB checkpoint; resumable
-BIND=127.0.0.1 ./start.sh         # ~10–12 min to /health, then serves on 127.0.0.1:8888
+BIND=127.0.0.1 ./start.sh         # about 13 min to /health, then serves on 127.0.0.1:8888
 ```
 
+- **The placeholder log file is needed on a fresh clone.** At `6b50864`, `start.sh` prunes old archived
+  logs at the start of its launch step. With none there yet, that line fails under `set -euo pipefail`, and
+  the script stops right after printing "Step 6: Launch", before any container starts, with nothing in its
+  output naming the cause. The placeholder gives it something to list. A separate message earlier on,
+  `start.sh: line 916: 09: value too great for base`, appears on every start and does not stop it.
 - **The recipe is MiaAI Lab's**, licensed AGPL-3.0-or-later, and you run it under their terms. It builds
   the packed PLE table on its first start.
 - **`BIND=127.0.0.1`** keeps the model off your network. By default the recipe binds every interface with
@@ -125,13 +131,24 @@ A decision can have up to ten options, lettered A to J. `state` can be text or a
 
 Use the command under "Step 4" in the [README](README.md), with `--endpoint http://127.0.0.1:8009`.
 
-## What has been checked, and what has not
+## What has been checked
 
-- The settings under "Our measured run's server settings" in step 1 are the ones that produced the filed
-  run. Step 1's default command differs from them only in the sequence count.
-- The step 1 commands are MiaAI Lab's, from their README and `.env.sample` at `6b50864`.
-- **We have not yet run this page, start to finish, on a freshly set-up Spark.** If a step fails for you,
-  open an issue here.
+**This page was run end to end on 2026-09-23, on one DGX Spark:**
+
+- A fresh clone of the recipe at `6b50864`. The server was healthy after 762 s.
+- The shim answered all three decision types, each with one output token.
+- JevBench's harness over the 231 public items: 206 correct (easy 48/48, standard 68/72, hard 90/111),
+  with 1 output token on every item. Our filed run scored 204, and this run agrees with it on 221 of the
+  231 items.
+
+**Two things differed from a new Spark.** The checkpoint and the packed PLE table were already on the
+machine, so `download.sh` verified the files by sha256 instead of downloading them, and `start.sh` did not
+rebuild the table. The shim also ran on another port, because 8009 was already in use.
+
+The settings under "Our measured run's server settings" in step 1 are the ones that produced the filed
+run; step 1's default command differs from them only in the sequence count. The step 1 commands are
+MiaAI Lab's, from their README and `.env.sample` at `6b50864`, plus the placeholder line. If a step fails
+for you, open an issue here.
 
 ## The filing's docker command
 
