@@ -44,6 +44,15 @@ derives from that project."* That sentence is the standard we are trying to meet
 [`oscarmenendezgarcia`](https://github.com/oscarmenendezgarcia) is credited by name for the
 Spanish-extended draft vocabulary and the audit gate.
 
+## NInfer — the one-token readout approach
+
+The shim answers each decision by reading the model's own probabilities over the option letters from a
+single forward pass, instead of asking it to write the answer out. **That approach is
+[NInfer](https://github.com/igorls/ninfer)'s**: a single-GPU inference engine (Apache-2.0) whose
+[JevBench entry](https://github.com/fstandhartinger/jevbench/issues/12) reads the option-letter
+distribution this way, including on this same checkpoint. Our shim does the same thing on stock vLLM —
+the code in `shim/` is ours; the idea it implements is theirs.
+
 ## Models
 
 - **Qwen / Alibaba** — [`Qwen/Qwen3.8-Flash-Next`](https://huggingface.co/Qwen/Qwen3.8-Flash-Next),
@@ -65,7 +74,8 @@ Spanish-extended draft vocabulary and the audit gate.
 
 To be exact about the part we can claim — and it is deliberately a short list:
 
-- **The native-readout shim** (`shim/typesafe_native_shim.py`) — original to this repository, MIT.
+- **The native-readout shim** (`shim/typesafe_native_shim.py`) — the code is original to this
+  repository, MIT; the approach it implements is NInfer's (above).
 - **The scoring and rescoring** (`rescore/`) — our harness invocation and per-item output.
 - **The packaging** — `patches/MANIFEST.md` (per-file sha256 against the published image),
   `swanOne-vllm-patch.diff`, and the verification that applying it reproduces all nine files

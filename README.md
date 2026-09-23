@@ -14,6 +14,8 @@ work are what made this possible from the outside.
 
 To be exact: **the nine files in `patches/` are their patch output, not our engineering.** Their
 generators reproduce all nine of our files byte-for-byte. What is ours is the packaging and the shim.
+The shim's approach — reading the answer from the model's probabilities over the option letters in one
+forward pass — is [NInfer](https://github.com/igorls/ninfer)'s; the code is ours.
 
 Their recipe licenses its **generators** under AGPL-3.0-or-later, but it also states that the files they
 generate "keep vLLM's own Apache-2.0 headers and remain Apache-2.0 works" — and our nine files are that
