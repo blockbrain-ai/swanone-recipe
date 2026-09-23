@@ -50,6 +50,48 @@ Same model, JevBench's public items, tokens generated per decision:
 The prompt (about 700 tokens) is read in every case; the readout removes the generation. Re-derive all
 three with `python3 baselines/tokens.py`.
 
+## Where it landed, category by category
+
+JevBench publishes per-item outcomes for the systems it has run on the same 231 public items. The filed
+run is lined up against 40 of them, item for item:
+
+| slice | items | ours | systems ahead | tied | max of the 40 |
+|---|---:|---:|---:|---:|---:|
+| all public items | 231 | 204 | 2 | 0 | 226 |
+| easy | 48 | 48 | 0 | 28 | 48 |
+| standard | 72 | 70 | 6 | 4 | 71 |
+| hard | 111 | 86 | 2 | 0 | 107 |
+
+| category | items | ours | systems ahead | tied | max of the 40 |
+|---|---:|---:|---:|---:|---:|
+| adequacy | 12 | 10 | 12 | 3 | 12 |
+| adversarial | 6 | 6 | 0 | 14 | 6 |
+| ambiguous | 7 | 6 | 5 | 3 | 7 |
+| extraction | 24 | 24 | 0 | 23 | 24 |
+| fact | 12 | 12 | 0 | 29 | 12 |
+| intent | 24 | 24 | 0 | 16 | 24 |
+| judge_hard | 17 | 12 | 14 | 1 | 16 |
+| long_policy | 19 | 16 | 2 | 0 | 19 |
+| multi_hop | 18 | 15 | 3 | 3 | 18 |
+| ordinal | 12 | 12 | 0 | 24 | 12 |
+| policy | 12 | 12 | 0 | 8 | 12 |
+| probability | 10 | 8 | 4 | 2 | 10 |
+| routing | 12 | 12 | 0 | 16 | 12 |
+| routing_hard | 5 | 5 | 0 | 23 | 5 |
+| temporal_numeric | 15 | 6 | 6 | 5 | 14 |
+| tool_selection | 12 | 12 | 0 | 37 | 12 |
+| tradeoff | 6 | 5 | 4 | 1 | 6 |
+| trap | 8 | 7 | 16 | 6 | 8 |
+
+The two systems ahead overall and on the hard tier are DeepSeek V4.1 Flash (226 of 231) and GPT-5.6 Luna
+at low reasoning effort (225), both frontier API models, and both at 107 of 111 on the hard tier.
+
+This is accuracy on the public items, not the board's Intelligence axis, which weights the tiers, corrects
+for chance and includes the judge tier. We developed the readout on these same items, so our side of every
+row is an upper bound; the 40 are JevBench's own runs. One item moves a small category by 4–20
+points. Re-derive the tables with `python3 rescore/category_split.py
+<jevbench>/results/v1.2/jevbench-v1.2-per-task.json`, from the board repository at `fd51755`.
+
 ## How to use this repository
 
 Everything lives under three directories, and the filing refers to them as placeholders you must

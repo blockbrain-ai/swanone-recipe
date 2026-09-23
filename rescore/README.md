@@ -12,6 +12,7 @@ sentence, so you do not have to take it on trust.
 | `native231d-results.jsonl` | our raw harness output for the 231 public items — 231 rows |
 | `per-item.jsonl` | the same run after scoring — 231 rows |
 | `summary.json` | the v1.2 axis computation the rescore recomputes and checks against |
+| `category_split.py` | lines this run up, item for item, against JevBench's published per-item outcomes for 40 systems (see the top-level README) |
 
 **No new run is behind any of this** (`"no_new_run": true` in the JSON): it is a recomputation of one
 existing public-tier run under a different composite. The scoring code is the board's own, at tag
