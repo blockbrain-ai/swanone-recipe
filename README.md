@@ -1,6 +1,9 @@
 # swanOne bench-request submission package
 
-Everything needed to run the filing. Companion document: `../SUBMISSION-DRAFT-swanOne.md`.
+Everything needed to run the filing, which is JevBench issue #23.
+
+**On a DGX Spark, start with [`SPARK.md`](SPARK.md).** The filing's serve command was written for the
+benchmark's x86 H100 and will not start on a Spark as written.
 
 ## Built on MiaAI Lab's recipe — please read
 
@@ -95,7 +98,9 @@ points. Re-derive the tables with `python3 rescore/category_split.py
 ## How to use this repository
 
 Everything lives under three directories, and the filing refers to them as placeholders you must
-substitute before pasting any command. **A literal paste fails**, because `<` is a shell redirect.
+substitute before pasting any command. **A literal paste fails**, because `<` is a shell redirect. These
+placeholders belong to the filing's H100 command; the Spark route in [`SPARK.md`](SPARK.md) needs none of
+them.
 
 | placeholder | set it to |
 |---|---|
