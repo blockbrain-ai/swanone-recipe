@@ -53,6 +53,16 @@ single forward pass, instead of asking it to write the answer out. **That approa
 distribution this way, including on this same checkpoint. Our shim does the same thing on stock vLLM —
 the code in `shim/` is ours; the idea it implements is theirs.
 
+## Dustin, on our team — jobe
+
+[`jobe`](https://github.com/MantisShrimpdev/jobe), by Dustin (MIT), is a one-pass decision readout over
+Qwen's released Qwen3.5-4B checkpoint, with no training of its own; its README reports 0.805 on JevBench's
+public set and 0.604 on the hard tier. It shaped our path to this submission in two ways. Reproducing its
+published per-item results through our own pipeline, we landed within a point of them, which is how we
+checked our readout pipeline. And reading Qwen's released checkpoint and its untrained base the same way
+showed that the hard-tier advantage we had been chasing through training comes from Qwen's own
+post-training: 61.3 % against 49.5 % on the public hard items.
+
 ## Models
 
 - **Qwen / Alibaba** — [`Qwen/Qwen3.8-Flash-Next`](https://huggingface.co/Qwen/Qwen3.8-Flash-Next),
