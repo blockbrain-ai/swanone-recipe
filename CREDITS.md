@@ -32,11 +32,14 @@ patch code here that is ours. What is ours is the packaging and the shim, nothin
 That is the honest accounting, and it is also why the licence sentence below matters so much more than
 a footnote.
 
-**We got the licence wrong, and we are sorry about it.** We first published these files as
-Apache-2.0. Your recipe is **AGPL-3.0-or-later**, and we cannot relicense it. `patches/` is now
-distributed under **AGPL-3.0-or-later** with the full text in `LICENSE-AGPL-3.0`, and
-`LICENSE-NOTICE.md` states the position. The correction is the least we owe, and it is later than it
-should have been.
+**We got the credit wrong first, and then over-corrected the licence, and we are sorry for both.** We
+originally published these files as Apache-2.0 without crediting you at all. We then read your
+`LICENSE` and concluded the output had to be AGPL-3.0-or-later, and restated it as such — too
+pessimistic, on your own README, which draws the line at the generators: *"Those generated files keep
+vLLM's own Apache-2.0 headers and remain Apache-2.0 works."* Since what we ship is that generated
+output, `patches/` is **Apache-2.0**, and **your AGPL scripts are not redistributed here at all**. If
+you would rather the output carried AGPL-3.0, or want any of this worded differently, tell us and we
+will change it.
 
 We would also like to thank you for the *manner* of the work, which taught us something. Every claim in
 that repository is measured on named hardware and reported with its failures attached —
@@ -69,7 +72,7 @@ Spanish-extended draft vocabulary and the audit gate. We noticed, and we have co
 
 To be exact about the part we can claim — and it is deliberately a short list:
 
-- **The native-readout shim** (`shim/typesafe_native_shim.py`) — original to this repository, Apache-2.0.
+- **The native-readout shim** (`shim/typesafe_native_shim.py`) — original to this repository, MIT.
 - **The scoring and rescoring** (`rescore/`) — our harness invocation and per-item output.
 - **The packaging** — `patches/MANIFEST.md` (per-file sha256 against the published image),
   `swanOne-vllm-patch.diff`, and the verification that applying it reproduces all nine files
@@ -82,10 +85,14 @@ produces, and packaging is not authorship of the code.
 
 ## Licence compatibility
 
-Some lines that MiaAI Lab's recipe patches are **Apache-2.0 vLLM** work, in open pull requests #53899,
-#53908, #53960, #54070 and #54129. Apache-2.0 code may be combined into an AGPL work, so the set as a
-whole is **AGPL-3.0-or-later**. The reverse would not have been possible.
+Some of the lines that MiaAI Lab's recipe patches are **Apache-2.0 vLLM** work, in open pull requests
+#53899, #53908, #53960, #54070 and #54129 — so the output is an Apache-2.0 work on both sides of the
+question, which is why we distribute it under Apache-2.0.
 
-AGPL §13 binds whoever runs the modified version for remote users. Our own endpoint is not public, so
-that duty is not ours today; if you run this as a network service, it is yours. The corresponding source
-is this repository, so the offer is satisfied by pointing here.
+MiaAI Lab's recipe itself is AGPL-3.0-or-later. **We do not redistribute those scripts**, so that
+licence does not reach this repository; if you rebuild the patch output yourself, you run their
+generators from their repository and their terms apply to that.
+
+AGPL §13 binds whoever runs a modified AGPL version for remote users. Even on the reading where the
+output is AGPL, our own endpoint is not public, so that duty would fall to whoever serves it publicly.
+The corresponding source is this repository either way.

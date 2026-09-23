@@ -1,23 +1,19 @@
-# Licence — this repository is mixed
+# Licence
 
-**There is no single licence for this repository. Read `LICENSE-NOTICE.md`.**
-
-Three different bodies of work sit here, under three different sets of terms:
+**This repository is mixed. Read `LICENSE-NOTICE.md`.**
 
 | what | licence | file |
 |---|---|---|
-| the native-readout shim (`shim/`) | Apache-2.0 | `LICENSE-APACHE-2.0` |
-| the vLLM sources the patches modify | Apache-2.0 | upstream vLLM |
-| **the patch set (`patches/`)** | **AGPL-3.0-or-later** | `LICENSE-AGPL-3.0` |
+| `shim/typesafe_native_shim.py` | **MIT** | `LICENSE-MIT` |
+| `patches/` (nine generated files) | **Apache-2.0** | `LICENSE-APACHE-2.0` |
+| `assets/draft_vocab_en_code_47k.txt` | data; no copyright claimed | 47,172 integer token ids |
+| MiaAI Lab's **generators** (not redistributed here) | AGPL-3.0-or-later | their repository |
 
-`patches/` is **MiaAI Lab's patch output**, from their AGPL-3.0-or-later recipe
-[`Qwen3.8-Flash-Next-Single-DGX-Spark`](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark).
-Their generators reproduce all nine of our files byte-for-byte, so **`patches/` is AGPL-3.0-or-later**
-and not ours to license otherwise. An earlier version of this repository called it Apache-2.0;
-`LICENSE-NOTICE.md` corrects that and `CREDITS.md` names everyone whose work is here.
+**`patches/` is MiaAI Lab's patch output, not our engineering.** Their generators reproduce all nine of
+our files byte-for-byte. Their recipe licenses the *generators* under AGPL-3.0-or-later and states that
+the files they generate "keep vLLM's own Apache-2.0 headers and remain Apache-2.0 works", so we
+distribute the output under Apache-2.0 on those terms. **Their AGPL scripts are not redistributed here.**
 
-The Apache-2.0 text is at `LICENSE-APACHE-2.0` and applies to the shim and to our own original code —
-**not** to `patches/`.
-
-If you are here to use the patch set, read `LICENSE-NOTICE.md` first. If you are MiaAI Lab and you want
-something changed about how your work is described here, please open an issue and we will change it.
+We have asked MiaAI Lab to confirm that reading. If they would rather this carried a different licence or
+different wording, open an issue and we will change it. `LICENSE-NOTICE.md` has the detail; `CREDITS.md`
+names everyone whose work is here.

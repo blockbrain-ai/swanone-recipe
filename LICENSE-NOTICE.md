@@ -1,40 +1,54 @@
 # Licensing
 
-**Summary: the repository is mixed. `shim/` is Apache-2.0. `patches/` is AGPL-3.0-or-later and is not
-our work to license.**
+## Summary
 
-An earlier version of this notice (2026-09-22) described the nine patched files as Apache-2.0
-"modifications of vLLM source". That was incorrect, and this file replaces it.
+| what | licence | why |
+|---|---|---|
+| `patches/` (the nine generated files) | **Apache-2.0** | they are modified **vLLM** source, and MiaAI Lab's recipe states that its generated files "keep vLLM's own Apache-2.0 headers and remain Apache-2.0 works" |
+| `shim/typesafe_native_shim.py` | **MIT** | original to this repository |
+| `assets/draft_vocab_en_code_47k.txt` | data, no copyright claimed | 47,172 integer token ids produced by a tokenizer |
+| **MiaAI Lab's scripts** | **AGPL-3.0-or-later** | we do **not** redistribute them |
 
-## `patches/` — AGPL-3.0-or-later
+**This notice has now been wrong in both directions, so here is what is actually true.** It first said
+Apache-2.0 without crediting MiaAI Lab. It was then corrected to AGPL-3.0-or-later on the reasoning that
+the patch code came from their **AGPL-3.0** generators. That was too pessimistic, on their own documented
+terms — see below. The position above is the one we are distributing under, and we have asked MiaAI Lab to
+confirm it.
 
-The nine files under `patches/` incorporate code from MiaAI Lab's recipe
-[`MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark`](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark),
-which is licensed **AGPL-3.0-or-later**, and **they are distributed here under AGPL-3.0-or-later**. The
-full licence text is in `LICENSE-AGPL-3.0`.
+## `patches/` — Apache-2.0, and MiaAI Lab's work
 
-**They are MiaAI Lab's patch output, not our engineering.** Their recipe's own generators
-(`files/patch_*.py`) reproduce all nine of these files **byte-for-byte** from the same pre-patch
-originals this repository ships. We verified that, and it is the honest basis for the licence above:
-there is no meaningful part of this patch code that is ours to license differently. What is ours is the
-packaging — `patches/MANIFEST.md`, the sha256 verification against the published image, and
-`swanOne-vllm-patch.diff`.
-
-Some of the lines the recipe patches are themselves **Apache-2.0 vLLM** work, in open pull requests
-#53899, #53908, #53960, #54070 and #54129. Apache-2.0 code may be combined into an AGPL work; the
-reverse is not possible, which is why the set as a whole is AGPL.
-
+The nine files are modified **vLLM** source (Apache-2.0) and retain vLLM's own headers.
 `patches/*.orig` and `patches/orig/` are the unmodified files from the published image, included so the
 diff is reproducible.
 
-**The nine patched files are byte-identical to MiaAI Lab's generator output and are not edited here.** If
-you need a change, change the generator upstream and re-run it.
+**They are MiaAI Lab's patch output, not our engineering.** Their recipe's generators
+([`MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark`](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark))
+reproduce all nine of these files **byte-for-byte** from the same pre-patch originals. There is no
+meaningful part of this patch code that is ours. What is ours is the packaging — `patches/MANIFEST.md`,
+the sha256 verification, and `swanOne-vllm-patch.diff`.
 
-## `shim/` — Apache-2.0
+**MiaAI Lab's recipe distinguishes its scripts from their output, and so do we:**
 
-`shim/typesafe_native_shim.py` is original to this repository and remains **Apache-2.0**; see
-`LICENSE-APACHE-2.0`. It talks to the server over HTTP, so it is a separate program and the AGPL above
-does not reach it.
+> It covers the files in this repository — the launcher, the patch generators, the packed-table builder
+> and the watchdog. It does **not** relicense anything they operate on … The patch generators emit
+> modified copies onto your machine only. Those generated files keep vLLM's own Apache-2.0 headers and
+> remain Apache-2.0 works. — their README, "What the license does and does not cover"
+
+So the generators are **AGPL-3.0-or-later**, and the files they generate are **Apache-2.0**. We
+redistribute only the output, so we distribute it under Apache-2.0 as they describe. **Their AGPL scripts
+are not in this repository at all** — if you rebuild the patch output yourself, you run their generators
+from their repository, under their licence.
+
+Some of the lines the recipe patches are themselves Apache-2.0 vLLM work, in open pull requests #53899,
+#53908, #53960, #54070 and #54129.
+
+**We have asked MiaAI Lab to confirm this reading.** If they would rather the output carried AGPL-3.0, or
+want the wording changed, we will change it — see below.
+
+## `shim/` — MIT
+
+`shim/typesafe_native_shim.py` is original to this repository and licensed **MIT** (`LICENSE-MIT`). It
+talks to the server over HTTP and is a separate program.
 
 ## Model weights
 
@@ -46,9 +60,10 @@ quantized with NVIDIA's Model Optimizer; serving it means accepting those terms 
 
 ## If you are MiaAI Lab
 
-This repository uses your recipe, and we got the licence wrong for a day. We would rather fix it the way
-you would want. If you want the credit worded differently, want the patch files removed, or would prefer
-to grant a permissive licence for the patch output, please open an issue and we will do it.
+This repository is built on your recipe and we got the credit wrong before we got it right. We currently
+believe, from your README, that the patch output is an Apache-2.0 work and that we are distributing it on
+those terms. **If you disagree, or want different wording, or want the patch files removed, please open an
+issue and we will do exactly that.** We would also rather credit you the way you want to be credited.
 
 ## Full credits
 

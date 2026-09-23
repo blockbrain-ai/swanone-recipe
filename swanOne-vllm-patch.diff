@@ -1,11 +1,12 @@
 swanOne: vLLM patch set for JevBench bench request
 
-Nine files, AGPL-3.0-or-later. These are MiaAI Lab's patch output from
-MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark (AGPL-3.0-or-later), whose
-generators reproduce all nine files byte-for-byte; they are not our
-engineering. Some lines they patch are Apache-2.0 vLLM work (PRs #53899,
-#53908, #53960, #54070, #54129); Apache-2.0 may be combined into AGPL, not
-the reverse. See LICENSE-NOTICE.md and CREDITS.md. 1093 changed lines
+Nine files, Apache-2.0. These are MiaAI Lab's patch output from
+MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark, whose generators reproduce all
+nine files byte-for-byte; they are not our engineering. That recipe licenses
+its generators AGPL-3.0-or-later but states the generated files "remain
+Apache-2.0 works", and some lines they patch are Apache-2.0 vLLM work (PRs
+#53899, #53908, #53960, #54070, #54129). Their AGPL scripts are not
+redistributed here. See LICENSE-NOTICE.md and CREDITS.md. 1093 changed lines
 (git diff --numstat, summed).
 
 Baseline = the published vllm/vllm-openai:qwen38-flash-next image, linux/amd64 child

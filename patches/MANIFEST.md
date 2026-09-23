@@ -1,8 +1,8 @@
 # swanOne patch set — MANIFEST
 
-Nine files, modifications to vLLM's own code **and to MiaAI Lab's AGPL-3.0 patch set** — see
-`../LICENSE-NOTICE.md` and `../CREDITS.md`; the set is not ours to license as a whole. Mount each file
-over the target path inside `vllm/vllm-openai:qwen38-flash-next`. Line counts are
+Nine files, Apache-2.0. They are modified vLLM source and **MiaAI Lab's patch output** — their
+generators reproduce all nine byte-for-byte. See `../LICENSE-NOTICE.md` and `../CREDITS.md`. Mount each
+file over the target path inside `vllm/vllm-openai:qwen38-flash-next`. Line counts are
 `git diff --no-index --numstat` against the pre-patch original; the in-image column is the sha256 of
 the *unpatched* file inside the published image, verified with `docker run --rm` while preparing the
 filing.
@@ -52,9 +52,10 @@ docker run ... \
 `ee819d2560b52ba1351acdd1c4a0244b77bb60694a7660c6363097a482b0afb5`. Mounted to `/root/draft_vocab.txt`
 and read only by our patched `mtp.py` via `VLLM_MTP_DRAFT_VOCAB`. **Not in the image** (verified: the path
 does not exist in a `docker run --rm` of the published image, and the unpatched image has no reference to
-the variable). Generated from the public checkpoint's tokenizer by MiaAI Lab's public AGPL-3.0
-`build_draft_vocab.py`. **Required only if MTP speculative decoding is kept** — see the filing §4.6 for how
-to drop it.
+the variable). **Produced by** MiaAI Lab's `build_draft_vocab.py` (their script, AGPL-3.0, not
+redistributed here) **from the public checkpoint's tokenizer** — the file itself is a list of 47,172
+integer token ids and carries no copyrightable expression of theirs. **Required only if MTP speculative
+decoding is kept** — see the filing §4.6 for how to drop it.
 
 ## The whole patch as one file
 
