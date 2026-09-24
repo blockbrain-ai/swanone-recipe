@@ -3,7 +3,8 @@
 Everything needed to run the filing, which is JevBench issue #23.
 
 **On a DGX Spark, start with [`SPARK.md`](SPARK.md).** The filing's serve command was written for the
-benchmark's x86 H100 and will not start on a Spark as written.
+benchmark's x86 H100 and will not start on a Spark as written. **On an H100 NVL, [`H100.md`](H100.md)** has the
+whole route in one place, with the context cap raised to 16384.
 
 ## Built on MiaAI Lab's recipe — please read
 
@@ -36,8 +37,9 @@ directly. `LICENSE-NOTICE.md` has the detail and `CREDITS.md` names everyone who
                   shim/test_shim.py     its answers and status codes, checked without a GPU
     rescore/    the filed run, per item, and its v1.3 rescore (see rescore/README.md)
     baselines/  the same model writing its answer out, reasoning on and off (see baselines/README.md)
+    H100.md     the whole route on an H100 NVL · SPARK.md the route on a DGX Spark
 
-Order of operations: patches -> server (filing §4.2) -> shim (filing §3) -> harness (filing §5).
+Order of operations: patches -> server (filing §4.2, or H100.md) -> shim (filing §3) -> harness (filing §5).
 
 Nothing here needs credentials. Do not commit a HuggingFace token into this tree.
 
@@ -158,7 +160,7 @@ scoring every longer item wrong. `python3 shim/test_shim.py` checks all of this 
   limit"* counts **wrong**. On an H100 NVL (94 GB) at `--gpu-memory-utilization 0.90`, both caps start with
   the rest of §4.2 unchanged, and each answered a long-policy test prompt of about 6,360 tokens with the
   expected label in one token. A larger cap costs concurrency, not memory, and the benchmark sends one
-  request at a time.
+  request at a time. [`H100.md`](H100.md) has the command with 16384.
 
 Nothing here requires credentials. If you would rather have a tarball or a `git diff`, open an issue on the
 benchmark repository and ask — we will put it wherever is easiest for you.
