@@ -33,6 +33,7 @@ directly. `LICENSE-NOTICE.md` has the detail and `CREDITS.md` names everyone who
                   patches/orig/         pre-patch originals for the 4 ple_offload files
     assets/     draft_vocab_en_code_47k.txt — 47,172-token MTP draft vocabulary (optional; see §4.6)
     shim/       typesafe_native_shim.py — implements /v1/systemone over vLLM logprobs
+                  shim/test_shim.py     its answers and status codes, checked without a GPU
     rescore/    the filed run, per item, and its v1.3 rescore (see rescore/README.md)
     baselines/  the same model writing its answer out, reasoning on and off (see baselines/README.md)
 
@@ -140,16 +141,24 @@ the dataset is yours to choose, so the complete command is:
 `--endpoint` must match whatever `SHIM_PORT` the shim was started with (§3 uses 8009). Add
 `--max-model-len`-style limits on your side as your harness requires; nothing in the shim depends on it.
 
+**Inputs the shim cannot take.** A prompt over the server's context limit, more than 26 options, or a
+question type it does not know gets **HTTP 422**, which JevBench's runner scores as one wrong answer and moves
+past. vLLM's own 401, 403 and 429 pass through unchanged, and any other vLLM failure is a 502; those count
+toward the runner's rule that three consecutive failures stop the run. Before answering, the shim reads the
+served model's context limit from vLLM's `/v1/models`; if the server does not list `SHIM_MODEL`, reports no
+limit, or was started with less than 4096 (`SHIM_MIN_CONTEXT`), it answers 503, so the run stops rather than
+scoring every longer item wrong. `python3 shim/test_shim.py` checks all of this without a GPU.
+
 **Two practical notes from running this ourselves on an H100 NVL:**
 
 - **`git` is not installed in the published image; `patch` is.** So the §8.3 route
   (`patch -p1 -d / < swanOne-vllm-patch.diff`) works inside the container, while a `git clone` does not.
-- **`--max-model-len 4096` is below this benchmark's documented hard tier**, which is described as
-  *"long multi-condition policy documents (2–6k tokens)"*. The longest **public** prompt is 3,946 tokens,
-  but the held-out items are not public, and the benchmark's own rule is that *"an input over a system's
-  documented context limit"* counts **wrong**. If your card can take a larger context, prefer it — we were
-  unable to start 8192 at `--gpu-memory-utilization 0.90` with `--max-num-seqs 6` on a 94 GB card, and the
-  4096 in §4.2 is what we validated.
+- **Run `--max-model-len 16384` (or 8192), not the 4096 in §4.2.** The benchmark describes its hard tier as
+  *"long multi-condition policy documents (2–6k tokens)"*, and *"an input over a system's documented context
+  limit"* counts **wrong**. On an H100 NVL (94 GB) at `--gpu-memory-utilization 0.90`, both caps start with
+  the rest of §4.2 unchanged, and each answered a long-policy test prompt of about 6,360 tokens with the
+  expected label in one token. A larger cap costs concurrency, not memory, and the benchmark sends one
+  request at a time.
 
 Nothing here requires credentials. If you would rather have a tarball or a `git diff`, open an issue on the
 benchmark repository and ask — we will put it wherever is easiest for you.

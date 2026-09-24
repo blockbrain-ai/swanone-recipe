@@ -34,6 +34,8 @@ import math
 import os
 import re
 import sys
+import threading
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -42,10 +44,74 @@ MODEL = os.environ.get("SHIM_MODEL", "qwen3.8-flash-next")
 PORT = int(os.environ.get("SHIM_PORT", "8009"))
 TOP_LOGPROBS = int(os.environ.get("SHIM_TOP_LOGPROBS", "20"))
 TIMEOUT = float(os.environ.get("SHIM_TIMEOUT", "180"))
+MIN_CONTEXT = int(os.environ.get("SHIM_MIN_CONTEXT", "4096"))
 # Thinking stays off: this is a readout, and a reasoning trace before an answer slot is not one.
 CHAT_TEMPLATE_KWARGS = {"enable_thinking": False}
 
-LETTERS = "ABCDEFGHIJ"
+# One letter per option, so up to 26 options. vLLM returns at most TOP_LOGPROBS (20) candidates, so on a
+# decision with 21-26 options the 20 most probable letters carry the distribution and the rest get 0.
+LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+# vLLM's wording when a prompt does not fit --max-model-len (it has changed between releases).
+_CONTEXT_ERROR = re.compile(r"maximum context length|maximum model length|max_model_len|too long and exceeds", re.I)
+
+
+class Unprocessable(ValueError):
+    """An input this system cannot answer: over the server's context or size limit, more than 26 options, a
+    question type it does not know, or options in the wrong form for their type.
+
+    THE STATUS CODE IS THE CONTRACT. The benchmark's runner stops a run after three consecutive failed items
+    unless the failure is an HTTP 422, which it scores as one wrong answer and moves on
+    (`jevbench/runner.py`, "a 422 is the system refusing this input (e.g. over its context limit), not an
+    outage"). Answering these with a 500, as this shim used to, lets three long items in a row end the run.
+    """
+
+
+class UpstreamError(RuntimeError):
+    """vLLM failed or could not be reached: a 502, so a dead server still stops the run. vLLM's own 401, 403
+    and 429 pass through unchanged, because the runner stops at once on those."""
+
+    def __init__(self, message, status=502):
+        super().__init__(message)
+        self.status = status
+
+
+# A SERVER STARTED WITH A SMALL --max-model-len WOULD MAKE EVERY LONGER ITEM A 422, and a run of 422s
+# completes quietly with all of them wrong. So before answering, the shim reads the served model's limit, and
+# answers 503 if it is below SHIM_MIN_CONTEXT, or if the server does not list SHIM_MODEL or report a limit.
+# A 503 counts toward the runner's stop rule. 4096 is the smallest cap this package was validated at, and the
+# longest public prompt is 3,946 tokens.
+_server_context = None
+_context_lock = threading.Lock()
+
+
+def server_context():
+    """The served model's max_model_len, read once from vLLM's /v1/models.
+
+    Raises UpstreamError: 502 if the server cannot be read (vLLM's own 401, 403 and 429 pass through), 503 if it
+    does not list SHIM_MODEL or reports no integer limit. A failure is not cached, so a server that comes up
+    later is read on the next request.
+    """
+    global _server_context
+    with _context_lock:
+        if _server_context is None:
+            url = VLLM.split("/v1/", 1)[0] + "/v1/models"
+            try:
+                with urllib.request.urlopen(url, timeout=10) as r:
+                    models = json.loads(r.read()).get("data") or []
+                entry = next((m for m in models if isinstance(m, dict) and m.get("id") == MODEL), None)
+            except urllib.error.HTTPError as e:
+                raise UpstreamError(f"{url}: HTTP {e.code}", e.code if e.code in (401, 403, 429) else 502) from e
+            except (OSError, ValueError, AttributeError, TypeError) as e:
+                raise UpstreamError(f"cannot read {url}: {type(e).__name__}: {e}") from e
+            if entry is None:
+                raise UpstreamError(f"{url} does not list {MODEL!r}; set SHIM_MODEL to the served model name", 503)
+            if not isinstance(entry.get("max_model_len"), int) or isinstance(entry.get("max_model_len"), bool):
+                raise UpstreamError(f"{url} reports no max_model_len for {MODEL!r}", 503)
+            _server_context = entry["max_model_len"]
+            sys.stderr.write(f"shim: the server's max_model_len is {_server_context}\n")
+    return _server_context
+
 
 # THE SCAFFOLDING IS THE FIX. The board's `openai_compat` adapter gives the model a system prompt
 # (`jevbench/adapters/openai_compat.py:20-24`): "You are a calibration engine. You never answer in
@@ -69,23 +135,24 @@ def options_from(criteria, qtype):
     noul  : criteria is {"true": ..., "false": ...} and the adapter wants P(yes). We read the
             true/false letters and hand back P(true), which the adapter maps onto {"yes","no"}.
     """
-    if qtype == "choice":
-        if not isinstance(criteria, dict):
-            raise ValueError("choice without a criteria mapping")
-        return [(LETTERS[i], k, v) for i, (k, v) in enumerate(criteria.items())]
+    if qtype not in ("choice", "score", "noul"):
+        raise Unprocessable(f"unsupported question type {qtype!r}")
     if qtype == "score":
         if not isinstance(criteria, (list, tuple)):
-            raise ValueError("score without a criteria list")
-        return [(LETTERS[i], str(i), v) for i, v in enumerate(criteria)]
-    if qtype == "noul":
+            raise Unprocessable("score without a criteria list")
+        items = [(str(i), v) for i, v in enumerate(criteria)]
+    else:
         if not isinstance(criteria, dict):
-            raise ValueError("noul without a criteria mapping")
-        # keep the record's own order, but remember which letter means "true"
-        out = []
-        for i, (k, v) in enumerate(criteria.items()):
-            out.append((LETTERS[i], k, v))
-        return out
-    raise ValueError(f"unsupported question type {qtype!r}")
+            raise Unprocessable(f"{qtype} without a criteria mapping")
+        # noul keeps the record's own order; answer_for finds which letter means "true"
+        if qtype == "noul" and not any(str(k).lower() == "true" for k in criteria):
+            raise Unprocessable("noul criteria had no 'true' key")
+        items = list(criteria.items())
+    if not items:
+        raise Unprocessable("no options")
+    if len(items) > len(LETTERS):
+        raise Unprocessable(f"{len(items)} options exceeds the {len(LETTERS)}-letter alphabet")
+    return [(LETTERS[i], k, v) for i, (k, v) in enumerate(items)]
 
 
 def build_prompt(state, instructions, opts):
@@ -106,7 +173,7 @@ def build_prompt(state, instructions, opts):
     return "\n".join(lines)
 
 
-_TOK_LETTER = re.compile(r"^[\s(\[{'\"]*([A-Ja-j])[\s.,:)\]}'\"]*$")
+_TOK_LETTER = re.compile(r"^[\s(\[{'\"]*([A-Za-z])[\s.,:)\]}'\"]*$")
 
 
 def letter_probs(top_logprobs, n_letters):
@@ -166,8 +233,18 @@ def call_vllm(prompt_text, allowed_letters):
         "structured_outputs": {"choice": allowed_letters},
     }).encode()
     req = urllib.request.Request(VLLM, data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-        return json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")[:500]
+        if e.code == 400 and _CONTEXT_ERROR.search(detail):
+            raise Unprocessable(f"over the server's context limit: {detail}") from e
+        if e.code == 413:
+            raise Unprocessable(f"over the server's request size limit: {detail}") from e
+        raise UpstreamError(f"vLLM HTTP {e.code}: {detail}", e.code if e.code in (401, 403, 429) else 502) from e
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        raise UpstreamError(f"vLLM unreachable or unreadable: {type(e).__name__}: {e}") from e
 
 
 def answer_for(task_state, decision):
@@ -175,11 +252,6 @@ def answer_for(task_state, decision):
     instructions = decision.get("instructions") or ""
     criteria = decision.get("criteria")
     opts = options_from(criteria, qtype)
-    if len(opts) > len(LETTERS):
-        raise ValueError(f"{len(opts)} options exceeds the letter alphabet")
-    if len(opts) > TOP_LOGPROBS:
-        raise ValueError(f"{len(opts)} options exceeds TOP_LOGPROBS={TOP_LOGPROBS}; "
-                         f"letters would be dropped from the readout")
 
     resp = call_vllm(build_prompt(task_state, instructions, opts),
                      [letter for letter, _l, _d in opts])
@@ -196,9 +268,7 @@ def answer_for(task_state, decision):
 
     if qtype == "noul":
         # criteria order is the record's; find which letter carried "true"
-        true_letter = next((i for i, (_l, lab, _d) in enumerate(opts) if str(lab).lower() == "true"), None)
-        if true_letter is None:
-            return None, usage, "noul criteria had no 'true' key"
+        true_letter = next(i for i, (_l, lab, _d) in enumerate(opts) if str(lab).lower() == "true")
         p_yes = probs.get(true_letter, 0.0)
         return {"type": "noul", "noul": p_yes}, usage, None
 
@@ -239,13 +309,26 @@ class Handler(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(n) or b"{}")
+            questions = body.get("questions") if isinstance(body, dict) else None
+            decision = questions.get("decision") if isinstance(questions, dict) else None
+            if not isinstance(decision, dict):
+                raise ValueError("expected a JSON object with questions.decision")
         except Exception as e:
             self._send(400, {"error": f"bad request body: {e}"})
             return
         try:
-            state = body.get("state") or ""
-            decision = ((body.get("questions") or {}).get("decision")) or {}
-            ans, usage, err = answer_for(state, decision)
+            context = server_context()
+            if context < MIN_CONTEXT:
+                raise UpstreamError(f"the server's max_model_len is {context}, below SHIM_MIN_CONTEXT={MIN_CONTEXT};"
+                                    f" restart vLLM with a larger --max-model-len", 503)
+            ans, usage, err = answer_for(body.get("state") or "", decision)
+        except Unprocessable as e:
+            sys.stderr.write(f"shim 422 {e}\n")
+            self._send(422, {"error": str(e)})
+            return
+        except UpstreamError as e:
+            self._send(e.status, {"error": str(e)})
+            return
         except Exception as e:
             self._send(500, {"error": f"{type(e).__name__}: {e}"})
             return

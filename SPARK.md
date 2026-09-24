@@ -125,7 +125,9 @@ The other two decision types use the same request:
 - **A score:** `"type": "score"`, with `"criteria"` as a list of level descriptions. Labels come back
   as `"0"`, `"1"`, … by position, each with a probability.
 
-A decision can have up to ten options, lettered A to J. `state` can be text or a JSON object.
+A decision can have up to 26 options, lettered A to Z. vLLM returns at most 20 candidate tokens, so with
+more than 20 options the 20 most likely letters carry the probabilities and the rest get 0. `state` can be
+text or a JSON object. A prompt over the server's context limit, or more than 26 options, gets HTTP 422.
 
 ## 4. Score it on JevBench's public items (optional)
 
